@@ -88,6 +88,11 @@ export function TeamList() {
     },
   });
 
+  // NEU: Erstelle eine Map von Rangname zu Sortierreihenfolge für die globale Verwendung
+  const rankOrderMap = useMemo(() => {
+    return new Map(roles.map(r => [r.name, r.sortOrder]));
+  }, [roles]);
+
   // Filter members based on search and selected ranks
   const filteredMembers = useMemo(() => {
     if (!members) return [];
@@ -98,7 +103,7 @@ export function TeamList() {
                             (member.discordId && member.discordId.includes(searchQuery));
       const matchesRank = selectedRanks.length === 0 || 
                           memberRanks.some(r => selectedRanks.includes(r as string)) ||
-                          (selectedRanks.includes("UNBEKANNTER RANG") && memberRanks.length === 0); // NEU: Filter für unbekannte Ränge
+                          (selectedRanks.includes("UNBEKANNTER RANG") && memberRanks.length === 0); // Filter für unbekannte Ränge
       return matchesSearch && matchesRank;
     });
   }, [members, searchQuery, selectedRanks]);
@@ -106,13 +111,10 @@ export function TeamList() {
   // Group filtered members by their highest rank (using dynamic roles from DB)
   const groupedMembers = useMemo(() => {
     if (!roles.length) {
-      // NEU: Fallback-Gruppierung, wenn keine Rollen vorhanden sind
+      // Fallback-Gruppierung, wenn keine Rollen vorhanden sind
       const unknownRankMembers = filteredMembers.filter(m => (m.ranks || []).length === 0);
       return unknownRankMembers.length > 0 ? { "UNBEKANNTER RANG": unknownRankMembers } : {};
     }
-    
-    // Create a map of rank name to sortOrder
-    const rankOrderMap = new Map(roles.map(r => [r.name, r.sortOrder]));
     
     // Initialisiere die Gruppen mit den bekannten Rängen
     const groups: Record<string, typeof filteredMembers> = roles.reduce((acc, role) => {
@@ -158,7 +160,7 @@ export function TeamList() {
       return acc;
     }, {} as Record<string, typeof filteredMembers>);
 
-  }, [filteredMembers, roles]);
+  }, [filteredMembers, roles, rankOrderMap]); // rankOrderMap als Dependency hinzugefügt
 
   const toggleRank = (rank: string) => {
     setSelectedRanks(prev => 
@@ -266,7 +268,7 @@ export function TeamList() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 max-h-[400px] overflow-y-auto backdrop-blur-xl">
-            {/* NEU: Option für unbekannte Ränge */}
+            {/* Option für unbekannte Ränge */}
             <DropdownMenuCheckboxItem
               key="UNBEKANNTER RANG"
               checked={selectedRanks.includes("UNBEKANNTER RANG")}
@@ -332,6 +334,7 @@ export function TeamList() {
                       const statusConfig = activityStatusConfig[member.activityStatus as ActivityStatus] || activityStatusConfig.abgemeldet;
                       const memberHighestRank = member.ranks && member.ranks.length > 0 
                         ? member.ranks.reduce((highest, current) => {
+                            // rankOrderMap ist jetzt verfügbar
                             const currentOrder = rankOrderMap.get(current as string) ?? 999;
                             const highestOrder = rankOrderMap.get(highest as string) ?? 999;
                             return currentOrder < highestOrder ? current : highest;
@@ -397,7 +400,7 @@ export function TeamList() {
                                   </Badge>
                                 );
                               })}
-                              {/* NEU: Badge für unbekannte Ränge */}
+                              {/* Badge für unbekannte Ränge */}
                               {(member.ranks || []).length === 0 && (
                                 <Badge variant="outline" className="text-xs text-gray-500 border-gray-500 bg-transparent">
                                   UNBEKANNTER RANG
