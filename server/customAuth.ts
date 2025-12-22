@@ -115,10 +115,8 @@ export async function updatePasswordWithMaster(
   newPassword: string, 
   masterPassword: string
 ): Promise<boolean> {
-  const MASTER_PASSWORD = "SyndikatReset1337";
-  
   // Verify master password
-  if (masterPassword !== MASTER_PASSWORD) {
+  if (masterPassword !== ENV.masterPassword) {
     throw new Error("Invalid master password");
   }
 
