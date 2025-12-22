@@ -29,7 +29,7 @@ import {
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Users, Shield, Loader2, Settings } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Users, Shield, Loader2, Settings, Search, ChevronUp, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { getLoginUrl } from "@/const";
 
@@ -40,6 +40,7 @@ export default function Admin() {
   const [editingMember, setEditingMember] = useState<number | null>(null);
   const [redirecting, setRedirecting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -273,6 +274,35 @@ export default function Admin() {
     });
   };
 
+
+  const moveRole = (id: number, direction: 'up' | 'down') => {
+    const index = roles.findIndex(r => r.id === id);
+    if (index === -1) return;
+    
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= roles.length) return;
+    
+    const targetRole = roles[newIndex];
+    
+    // Swap sortOrder
+    updateRole.mutate({ id: id, sortOrder: targetRole.sortOrder });
+    updateRole.mutate({ id: targetRole.id, sortOrder: roles[index].sortOrder });
+  };
+
+  const moveVerwaltung = (id: number, direction: 'up' | 'down') => {
+    const index = verwaltungen.findIndex(v => v.id === id);
+    if (index === -1) return;
+    
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= verwaltungen.length) return;
+    
+    const targetVerwaltung = verwaltungen[newIndex];
+    
+    // Swap sortOrder
+    updateVerwaltung.mutate({ id: id, sortOrder: targetVerwaltung.sortOrder });
+    updateVerwaltung.mutate({ id: targetVerwaltung.id, sortOrder: verwaltungen[index].sortOrder });
+  };
+
   // Auth check
   if (authLoading) {
     return (
@@ -310,6 +340,26 @@ export default function Admin() {
       </div>
     );
   }
+
+
+  // Filter members based on search query
+  const filteredMembers = members?.filter(member => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const nameMatch = member.name.toLowerCase().includes(query);
+    const idMatch = member.discordId?.includes(searchQuery);
+    const rankMatch = (member.ranks as string[])?.some(rank => {
+      const roleObj = roles.find(r => r.name === rank);
+      return roleObj?.displayName.toLowerCase().includes(query) || rank.toLowerCase().includes(query);
+    });
+    const verwaltungMatch = (member.verwaltungen as string[])?.some(verwaltung => {
+      const verwaltungObj = verwaltungen.find(v => v.name === verwaltung);
+      return verwaltungObj?.displayName.toLowerCase().includes(query) || verwaltung.toLowerCase().includes(query);
+    });
+    
+    return nameMatch || idMatch || rankMatch || verwaltungMatch;
+  }) || [];
 
   // Get only listed roles and verwaltungen
   const listedRoles = roles.filter(r => r.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -413,6 +463,20 @@ export default function Admin() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Suche nach Name, Rang, Verwaltung oder Discord ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-black/20 border-red-900/30 text-white placeholder:text-gray-500"
+            />
+          </div>
+        </div>
+
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
             <Users className="h-6 w-6 text-red-500" />
@@ -474,8 +538,28 @@ export default function Admin() {
 
                     {/* Roles List */}
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {roles.map((role) => (
+                      {roles.map((role, index) => (
                         <div key={role.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-red-900/20">
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              onClick={() => moveRole(role.id, 'up')}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-red-950/30"
+                              disabled={index === 0}
+                            >
+                              <ChevronUp className="h-4 w-4 text-gray-400" />
+                            </Button>
+                            <Button
+                              onClick={() => moveRole(role.id, 'down')}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-red-950/30"
+                              disabled={index === roles.length - 1}
+                            >
+                              <ChevronDown className="h-4 w-4 text-gray-400" />
+                            </Button>
+                          </div>
                           <div className="flex-1">
                             <div className="font-medium text-white">{role.displayName}</div>
                             <div className="text-sm text-gray-400">{role.name}</div>
@@ -539,8 +623,28 @@ export default function Admin() {
 
                     {/* Verwaltungen List */}
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {verwaltungen.map((verwaltung) => (
+                      {verwaltungen.map((verwaltung, index) => (
                         <div key={verwaltung.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-orange-900/20">
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              onClick={() => moveVerwaltung(verwaltung.id, 'up')}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-orange-950/30"
+                              disabled={index === 0}
+                            >
+                              <ChevronUp className="h-4 w-4 text-gray-400" />
+                            </Button>
+                            <Button
+                              onClick={() => moveVerwaltung(verwaltung.id, 'down')}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-orange-950/30"
+                              disabled={index === verwaltungen.length - 1}
+                            >
+                              <ChevronDown className="h-4 w-4 text-gray-400" />
+                            </Button>
+                          </div>
                           <div className="flex-1">
                             <div className="font-medium text-white">{verwaltung.displayName}</div>
                             <div className="text-sm text-gray-400">{verwaltung.name}</div>
@@ -659,7 +763,7 @@ export default function Admin() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {members.map((member, index) => (
+            {filteredMembers.map((member, index) => (
               <motion.div
                 key={member.id}
                 initial={{ opacity: 0, y: 20 }}

@@ -1,13 +1,23 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { teamMembers, InsertTeamMember, TeamMember, availableRanks, AvailableRank, availableVerwaltungen, AvailableVerwaltung } from "../drizzle/schema";
+import { teamMembers, InsertTeamMember, TeamMember, roles } from "../drizzle/schema";
 
-// Re-export for use in routers
-export { availableRanks, availableVerwaltungen };
-export type { AvailableRank, AvailableVerwaltung };
-
-// Rank hierarchy order for sorting (first rank in the array determines position)
-const rankOrder = availableRanks;
+// Get rank order from database
+async function getRankOrder(): Promise<Map<string, number>> {
+  const db = await getDb();
+  if (!db) {
+    return new Map();
+  }
+  
+  const allRoles = await db.select().from(roles).orderBy(roles.sortOrder);
+  const rankMap = new Map<string, number>();
+  
+  allRoles.forEach((role) => {
+    rankMap.set(role.name, role.sortOrder);
+  });
+  
+  return rankMap;
+}
 
 export async function getAllTeamMembers(): Promise<TeamMember[]> {
   const db = await getDb();
@@ -28,21 +38,28 @@ export async function getAllTeamMembers(): Promise<TeamMember[]> {
     joinDate: teamMembers.joinDate,
     createdAt: teamMembers.createdAt,
     updatedAt: teamMembers.updatedAt,
-}).from(teamMembers);
+  }).from(teamMembers);
 
+  // Get rank order from database
+  const rankOrder = await getRankOrder();
   
-  // Sort by the highest rank in their ranks array
+  // Sort by the highest rank (lowest sortOrder) in their ranks array
   return members.sort((a, b) => {
     const aRanks = a.ranks || [];
     const bRanks = b.ranks || [];
     
-    // Get the highest rank (lowest index) for each member
-    const aHighestIndex = Math.min(...aRanks.map(r => rankOrder.indexOf(r as AvailableRank)).filter(i => i >= 0), 999);
-    const bHighestIndex = Math.min(...bRanks.map(r => rankOrder.indexOf(r as AvailableRank)).filter(i => i >= 0), 999);
+    // Get the highest rank (lowest sortOrder) for each member
+    const aHighestOrder = Math.min(
+      ...aRanks.map(r => rankOrder.get(r as string) ?? 999),
+      999
+    );
+    const bHighestOrder = Math.min(
+      ...bRanks.map(r => rankOrder.get(r as string) ?? 999),
+      999
+    );
     
-    return aHighestIndex - bHighestIndex;
+    return aHighestOrder - bHighestOrder;
   });
-return members;
 }
 
 export async function getTeamMemberById(id: number): Promise<TeamMember | undefined> {
