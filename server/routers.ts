@@ -19,44 +19,9 @@ import { eq } from "drizzle-orm";
 
 // Zod schema for rank validation
 const rankSchema = z.enum([
-  "Projektleitung",
-  "Stv.Projektleitung",
-  "Leadership",
-  "Head-Admin",
-  "Admin",
-  "T-Admin",
-  "Head-Moderation",
-  "Moderation",
-  "T-Moderation",
-  "Head-Support",
-  "Support",
-  "T-Support",
-  "Head-Analyst",
-  "Analyst",
-  "Developer",
-  "Development Cars",
-  "Development Mapping",
-  "Development Kleidung",
-  "Medien Gestalter",
-  "Highteam"
-]);
-
-// Zod schema for Verwaltungen validation
-const verwaltungSchema = z.enum([
-  "Frakverwaltungs Leitung",
-  "Frakverwaltung",
-  "Eventmanagement",
-  "Teamverwaltungs Leitung",
-  "Teamverwaltung",
-  "Regelwerkteam",
-  "Teamüberwachung",
-  "Support Leitung",
-  "Mod Leitung",
-  "Spendenverwaltung",
-  "Streamingverwaltung"
-]);
-
-const activityStatusSchema = z.enum(["aktiv", "inaktiv", "abgemeldet", "gespraech_noetig"]);
+// Simplified validation - ranks and verwaltungen are now dynamic
+const rankSchema = z.string().min(1).max(100);
+const verwaltungSchema = z.string().min(1).max(100);
 
 // Admin-only procedure
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
