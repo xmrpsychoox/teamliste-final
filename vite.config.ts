@@ -5,9 +5,7 @@ import fs from "node:fs";
 import path from "path";
 import { defineConfig } from "vite";
 
-
-
-const plugins = [react(), tailwindcss(), jsxLocPlugin(),
+const plugins = [react(), tailwindcss(), jsxLocPlugin()];
 
 export default defineConfig({
   plugins,
@@ -38,7 +36,7 @@ export default defineConfig({
     ],
     fs: {
       strict: true,
-      deny: ["**/.*"],
+      deny: ["**/.**"],
     },
   },
 });
