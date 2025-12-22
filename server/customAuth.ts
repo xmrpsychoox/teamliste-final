@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { users } from "../drizzle/schema";
 import { getDb } from "./db";
+import { ENV } from "./_core/env";
+
 
 const SALT_ROUNDS = 10;
 
@@ -15,7 +17,7 @@ export async function hashPassword(password: string): Promise<string> {
 /**
  * Verify a password against a hash
  */
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+export async function verifyPassword(passwoif (masterPassword !== ENV.masterPassword) {rd: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
 
@@ -138,4 +140,35 @@ export async function updatePasswordWithMaster(
   await db.update(users).set({ passwordHash }).where(eq(users.username, username));
 
   return true;
+}
+
+export async function resetUserPassword(
+  username: string,
+  newPassword: string,
+  masterPassword: string
+): Promise<{ success: boolean; message: string }> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  console.log("[DEBUG] Master password from ENV:", ENV.masterPassword);
+  console.log("[DEBUG] Master password from input:", masterPassword);
+
+  if (masterPassword !== ENV.masterPassword) {
+    throw new Error("Invalid master password");
+  }
+
+  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+
+  if (result.length === 0) {
+    throw new Error("User not found");
+  }
+
+  const user = result[0];
+  const newPasswordHash = await hashPassword(newPassword);
+
+  await db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, user.id));
+
+  return { success: true, message: "Password updated successfully" };
 }
