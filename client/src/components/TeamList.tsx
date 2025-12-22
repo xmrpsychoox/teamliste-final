@@ -97,33 +97,67 @@ export function TeamList() {
                             member.id.toString().includes(searchQuery) ||
                             (member.discordId && member.discordId.includes(searchQuery));
       const matchesRank = selectedRanks.length === 0 || 
-                          memberRanks.some(r => selectedRanks.includes(r as string));
+                          memberRanks.some(r => selectedRanks.includes(r as string)) ||
+                          (selectedRanks.includes("UNBEKANNTER RANG") && memberRanks.length === 0); // NEU: Filter für unbekannte Ränge
       return matchesSearch && matchesRank;
     });
   }, [members, searchQuery, selectedRanks]);
 
   // Group filtered members by their highest rank (using dynamic roles from DB)
   const groupedMembers = useMemo(() => {
-    if (!roles.length) return {};
+    if (!roles.length) {
+      // NEU: Fallback-Gruppierung, wenn keine Rollen vorhanden sind
+      const unknownRankMembers = filteredMembers.filter(m => (m.ranks || []).length === 0);
+      return unknownRankMembers.length > 0 ? { "UNBEKANNTER RANG": unknownRankMembers } : {};
+    }
     
     // Create a map of rank name to sortOrder
     const rankOrderMap = new Map(roles.map(r => [r.name, r.sortOrder]));
     
-    return roles.reduce((acc, role) => {
-      const rankMembers = filteredMembers.filter((m) => {
-        const memberRanks = m.ranks || [];
-        // Get highest rank (lowest sortOrder) for this member
-        const highestRankOrder = Math.min(
-          ...memberRanks.map(r => rankOrderMap.get(r as string) ?? 999)
-        );
-        const highestRank = roles.find(r => r.sortOrder === highestRankOrder);
-        return highestRank?.name === role.name;
-      });
-      if (rankMembers.length > 0) {
-        acc[role.name] = rankMembers;
+    // Initialisiere die Gruppen mit den bekannten Rängen
+    const groups: Record<string, typeof filteredMembers> = roles.reduce((acc, role) => {
+      acc[role.name] = [];
+      return acc;
+    }, {} as Record<string, typeof filteredMembers>);
+
+    // Füge eine Gruppe für unbekannte Ränge hinzu
+    groups["UNBEKANNTER RANG"] = [];
+
+    // Verteile die Mitglieder auf die Gruppen
+    filteredMembers.forEach((member) => {
+      const memberRanks = member.ranks || [];
+      
+      if (memberRanks.length === 0) {
+        // Mitglied hat keinen Rang, füge es zur Gruppe "UNBEKANNTER RANG" hinzu
+        groups["UNBEKANNTER RANG"].push(member);
+        return;
+      }
+
+      // Finde den höchsten Rang (niedrigste sortOrder) für dieses Mitglied
+      const highestRankOrder = Math.min(
+        ...memberRanks.map(r => rankOrderMap.get(r as string) ?? 999)
+      );
+
+      // Finde den entsprechenden Rollennamen
+      const highestRank = roles.find(r => r.sortOrder === highestRankOrder);
+
+      if (highestRank) {
+        // Füge das Mitglied zur Gruppe des höchsten Rangs hinzu
+        groups[highestRank.name].push(member);
+      } else {
+        // Fallback, falls der Rangname nicht in der Rollenliste gefunden wird (sollte nicht passieren, aber zur Sicherheit)
+        groups["UNBEKANNTER RANG"].push(member);
+      }
+    });
+
+    // Entferne leere Gruppen und gib das Ergebnis zurück
+    return Object.entries(groups).reduce((acc, [key, value]) => {
+      if (value.length > 0) {
+        acc[key] = value;
       }
       return acc;
     }, {} as Record<string, typeof filteredMembers>);
+
   }, [filteredMembers, roles]);
 
   const toggleRank = (rank: string) => {
@@ -232,6 +266,16 @@ export function TeamList() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 max-h-[400px] overflow-y-auto backdrop-blur-xl">
+            {/* NEU: Option für unbekannte Ränge */}
+            <DropdownMenuCheckboxItem
+              key="UNBEKANNTER RANG"
+              checked={selectedRanks.includes("UNBEKANNTER RANG")}
+              onCheckedChange={() => toggleRank("UNBEKANNTER RANG")}
+              className="focus:bg-red-900/30 focus:text-white hover:bg-red-900/30 cursor-pointer font-bold"
+            >
+              UNBEKANNTER RANG
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator className="bg-red-900/50" />
             {roles.map((role) => (
               <DropdownMenuCheckboxItem
                 key={role.id}
@@ -264,178 +308,128 @@ export function TeamList() {
             NO OPERATIVES FOUND MATCHING CRITERIA
           </motion.div>
         ) : (
-          roles.map((role) => {
-            const rankMembers = groupedMembers[role.name];
-            if (!rankMembers) return null;
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }}
+            className="space-y-8"
+          >
+            {Object.entries(groupedMembers).map(([rankName, members]) => {
+              const role = roles.find(r => r.name === rankName);
+              const sortOrder = role?.sortOrder ?? 999; // 999 for "UNBEKANNTER RANG"
+              const rankColor = getRankColor(sortOrder);
+              const displayName = role?.displayName ?? "UNBEKANNTER RANG";
 
-            return (
-              <motion.div
-                key={role.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5 }}
-                className="space-y-4"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-red-900/50 to-transparent" />
-                  <h2 className={`text-2xl font-bold uppercase tracking-widest ${getRankColor(role.sortOrder)} syndikat-text-glow`}>
-                    {role.displayName.toUpperCase()}
-                  </h2>
-                  <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-red-900/50 to-transparent" />
-                </div>
+              return (
+                <Card key={rankName} className="bg-black/40 border-red-900/30 shadow-2xl shadow-red-900/10">
+                  <CardHeader className="border-b border-red-900/30 p-4">
+                    <CardTitle className={`text-xl font-bold ${rankColor} flex items-center`}>
+                      <Briefcase className="h-5 w-5 mr-2" />
+                      {displayName} ({members.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {members.map((member) => {
+                      const statusConfig = activityStatusConfig[member.activityStatus as ActivityStatus] || activityStatusConfig.abgemeldet;
+                      const memberHighestRank = member.ranks && member.ranks.length > 0 
+                        ? member.ranks.reduce((highest, current) => {
+                            const currentOrder = rankOrderMap.get(current as string) ?? 999;
+                            const highestOrder = rankOrderMap.get(highest as string) ?? 999;
+                            return currentOrder < highestOrder ? current : highest;
+                          }, member.ranks[0] as string)
+                        : "UNBEKANNTER RANG";
+                      const memberRole = roles.find(r => r.name === memberHighestRank);
+                      const memberSortOrder = memberRole?.sortOrder ?? 999;
+                      const memberRankColor = getRankColor(memberSortOrder);
+                      const memberRankDisplayName = memberRole?.displayName ?? "UNBEKANNTER RANG";
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {rankMembers.map((member) => {
-                    const memberRanks = member.ranks || [];
-                    const memberVerwaltungen = (member.verwaltungen || []) as string[];
-                    const activityStatus = (member.activityStatus || "aktiv") as ActivityStatus;
-                    const statusConfig = activityStatusConfig[activityStatus];
-
-                    return (
-                      <Card key={member.id} className="syndikat-card border-l-4 border-l-red-600 overflow-hidden group relative">
-                        {/* Hover effect overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-red-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                        
-                        <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                          <div className="relative">
-                            <Avatar className="h-12 w-12 border-2 border-red-900/50 group-hover:border-red-500 transition-colors">
-                              <AvatarImage src={member.avatarUrl || undefined} />
-                              <AvatarFallback className="bg-red-950 text-red-200 font-bold">
-                                {member.name.substring(0, 2).toUpperCase()}
-                              </AvatarFallback>
+                      return (
+                        <motion.div
+                          key={member.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3 }}
+                          className="flex flex-col p-3 bg-black/50 border border-red-900/30 rounded-lg hover:border-red-500/50 transition-all duration-200"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Avatar className="h-10 w-10 border-2 border-red-500/50">
+                              <AvatarImage src={member.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${member.id}`} alt={member.name} />
+                              <AvatarFallback className="bg-red-900/50 text-white">{member.name.charAt(0)}</AvatarFallback>
                             </Avatar>
-                            {/* Activity Status Indicator */}
-                            <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-black ${statusConfig.bgColor} flex items-center justify-center`} 
-                                  title={statusConfig.label}>
-                            </span>
-                          </div>
-                          <div className="flex flex-col overflow-hidden flex-1">
-                            <CardTitle className="text-lg font-bold truncate text-gray-100 group-hover:text-red-400 transition-colors">
-                              {member.name}
-                            </CardTitle>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {memberRanks.slice(0, 2).map((r, i) => {
-                                const roleObj = roles.find(role => role.name === r);
-                                return (
-                                  <span key={i} className={`text-[10px] uppercase tracking-wider font-semibold ${roleObj ? getRankColor(roleObj.sortOrder) : 'text-gray-400'}`}>
-                                    {roleObj?.displayName || r}
-                                  </span>
-                                );
-                              })}
-                              {memberRanks.length > 2 && (
-                                <span className="text-[10px] text-gray-500">+{memberRanks.length - 2}</span>
-                              )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{member.name}</p>
+                              <p className={`text-xs ${memberRankColor} truncate`}>{memberRankDisplayName}</p>
                             </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {/* Discord ID */}
-                          {member.discordId && (
-                            <div className="text-xs text-gray-500 font-mono">
-                              Discord: <span className="text-gray-400">{member.discordId}</span>
-                            </div>
-                          )}
-
-                          {/* Verwaltungen - displayed prominently */}
-                          {memberVerwaltungen.length > 0 && (
-                            <div className="space-y-1.5">
-                              <div className="flex items-center gap-1 text-xs text-orange-400/70 uppercase tracking-wider font-semibold">
-                                <Briefcase className="h-3 w-3" />
-                                <span>Verwaltungen</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {memberVerwaltungen.map((v, i) => (
-                                  <Badge 
-                                    key={i} 
-                                    variant="outline" 
-                                    className="text-[10px] bg-orange-950/30 border-orange-500/30 text-orange-300 hover:bg-orange-950/50"
-                                  >
-                                    {v}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Activity Status Selector (Admin only) */}
-                          <div className="flex items-center justify-between">
-                            {isAdmin ? (
+                            {isAdmin && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className={`h-7 px-2 ${statusConfig.color} hover:bg-red-950/30`}
-                                    disabled={updateActivityMutation.isPending}
-                                  >
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-red-400">
                                     {statusConfig.icon}
-                                    <span className="ml-1 text-xs">{statusConfig.label}</span>
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent className="bg-black/90 border-red-900/50 backdrop-blur-xl">
-                                  <DropdownMenuLabel className="text-gray-400 text-xs">Status ändern</DropdownMenuLabel>
-                                  <DropdownMenuSeparator className="bg-red-900/30" />
-                                  {(Object.entries(activityStatusConfig) as [ActivityStatus, typeof activityStatusConfig[ActivityStatus]][]).map(([status, config]) => (
-                                    <DropdownMenuItem
-                                      key={status}
-                                      onClick={() => handleActivityStatusChange(member.id, status)}
-                                      className={`${config.color} focus:bg-red-900/30 cursor-pointer`}
+                                <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 backdrop-blur-xl">
+                                  <DropdownMenuLabel>Aktivitätsstatus</DropdownMenuLabel>
+                                  <DropdownMenuSeparator className="bg-red-900/50" />
+                                  {Object.entries(activityStatusConfig).map(([key, config]) => (
+                                    <DropdownMenuItem 
+                                      key={key} 
+                                      onClick={() => handleActivityStatusChange(member.id, key as ActivityStatus)}
+                                      className="focus:bg-red-900/30 focus:text-white hover:bg-red-900/30 cursor-pointer"
                                     >
-                                      {config.icon}
-                                      <span className="ml-2">{config.label}</span>
+                                      <span className={`mr-2 ${config.color}`}>{config.icon}</span>
+                                      {config.label}
                                     </DropdownMenuItem>
                                   ))}
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            ) : (
-                              <div className={`flex items-center gap-1 ${statusConfig.color} text-xs`}>
-                                {statusConfig.icon}
-                                <span>{statusConfig.label}</span>
-                              </div>
                             )}
-                            <span className="text-[10px] text-gray-600 font-mono">
-                              ID: {member.id.toString().padStart(4, '0')}
-                            </span>
                           </div>
-
-                          {/* Notes Section - Clearly visible and editable */}
-                          <div className="mt-3 pt-3 border-t border-red-900/20">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Notizen</span>
-                              {isAdmin && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-2 text-gray-500 hover:text-red-400 hover:bg-red-950/30"
-                                  onClick={() => openNotesEditor(member.id, member.notes)}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
+                          
+                          <div className="mt-2 space-y-1">
+                            <div className="flex flex-wrap gap-1">
+                              {(member.ranks || []).map((rank, index) => {
+                                const role = roles.find(r => r.name === rank);
+                                const sortOrder = role?.sortOrder ?? 999;
+                                const color = getRankColor(sortOrder);
+                                return (
+                                  <Badge key={index} variant="outline" className={`text-xs ${color} border-current bg-transparent`}>
+                                    {role?.displayName || rank}
+                                  </Badge>
+                                );
+                              })}
+                              {/* NEU: Badge für unbekannte Ränge */}
+                              {(member.ranks || []).length === 0 && (
+                                <Badge variant="outline" className="text-xs text-gray-500 border-gray-500 bg-transparent">
+                                  UNBEKANNTER RANG
+                                </Badge>
                               )}
                             </div>
-                            {member.notes ? (
-                              <div className="bg-black/30 rounded-md p-3 border border-red-900/20">
-                                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
-                                  {member.notes}
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="bg-black/20 rounded-md p-3 border border-dashed border-red-900/20">
-                                <p className="text-xs text-gray-600 italic">
-                                  {isAdmin ? "Klicken Sie auf den Stift, um eine Notiz hinzuzufügen" : "Keine Notizen vorhanden"}
-                                </p>
+                            
+                            {isAdmin && (
+                              <div className="mt-2 pt-2 border-t border-red-900/30">
+                                <div className="flex justify-between items-start">
+                                  <p className="text-xs text-gray-400 font-mono">NOTIZEN:</p>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 text-gray-400 hover:text-red-400"
+                                    onClick={() => openNotesEditor(member.id, member.notes)}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <p className="text-sm text-gray-300 whitespace-pre-wrap min-h-[20px]">{member.notes || "Keine Notizen"}</p>
                               </div>
                             )}
                           </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            );
-          })
+                        </motion.div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
