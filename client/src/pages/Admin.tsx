@@ -352,6 +352,32 @@ export default function Admin() {
   const listedRoles = roles.filter(r => r.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
   const listedVerwaltungen = verwaltungen.filter(v => v.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
 
+  // Sort members by rank hierarchy
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    // Get the highest rank (lowest sortOrder) for each member
+    const getHighestRankOrder = (member: typeof a) => {
+      if (!member.ranks || member.ranks.length === 0) return Infinity;
+      
+      const rankOrders = (member.ranks as string[]).map(rankName => {
+        const role = roles.find(r => r.name === rankName);
+        return role?.sortOrder ?? Infinity;
+      });
+      
+      return Math.min(...rankOrders);
+    };
+    
+    const aOrder = getHighestRankOrder(a);
+    const bOrder = getHighestRankOrder(b);
+    
+    // Sort by rank order (lower sortOrder = higher priority)
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    
+    // If same rank, sort alphabetically by name
+    return a.name.localeCompare(b.name, 'de');
+  });
+
   const RankSelector = () => (
     <div className="space-y-2">
       <Label>Ränge *</Label>
@@ -730,7 +756,7 @@ export default function Admin() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredMembers.map((member, index) => (
+            {sortedMembers.map((member, index) => (
               <motion.div
                 key={member.id}
                 initial={{ opacity: 0, y: 20 }}
