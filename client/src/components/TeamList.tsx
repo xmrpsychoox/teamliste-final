@@ -27,52 +27,23 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-const rankHierarchy = [
-  "Projektleitung",
-  "Stv.Projektleitung",
-  "Leadership",
-  "Head-Admin",
-  "Admin",
-  "T-Admin",
-  "Head-Moderation",
-  "Moderation",
-  "T-Moderation",
-  "Head-Support",
-  "Support",
-  "T-Support",
-  "Head-Analyst",
-  "Analyst",
-  "Developer",
-  "Development Cars",
-  "Development Mapping",
-  "Development Kleidung",
-  "Medien Gestalter",
-  "Highteam"
-] as const;
-
-type Rank = typeof rankHierarchy[number];
-
-const rankColors: Record<Rank, string> = {
-  "Projektleitung": "text-red-600 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]",
-  "Stv.Projektleitung": "text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.8)]",
-  "Leadership": "text-orange-500",
-  "Head-Admin": "text-red-400",
-  "Admin": "text-red-400",
-  "T-Admin": "text-red-300",
-  "Head-Moderation": "text-blue-500",
-  "Moderation": "text-blue-400",
-  "T-Moderation": "text-blue-300",
-  "Head-Support": "text-green-500",
-  "Support": "text-green-400",
-  "T-Support": "text-green-300",
-  "Head-Analyst": "text-purple-500",
-  "Analyst": "text-purple-400",
-  "Developer": "text-cyan-400",
-  "Development Cars": "text-cyan-300",
-  "Development Mapping": "text-cyan-300",
-  "Development Kleidung": "text-cyan-300",
-  "Medien Gestalter": "text-pink-500",
-  "Highteam": "text-yellow-500 drop-shadow-[0_0_6px_rgba(234,179,8,0.8)]"
+// Dynamic rank colors based on hierarchy position
+const getRankColor = (sortOrder: number): string => {
+  const colors = [
+    "text-red-600 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]",  // 0-1: Top ranks
+    "text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.8)]",  // 2-3
+    "text-orange-500",                                           // 4-5
+    "text-red-400",                                              // 6-8
+    "text-blue-500",                                             // 9-11
+    "text-green-500",                                            // 12-14
+    "text-purple-500",                                           // 15-17
+    "text-cyan-400",                                             // 18-20
+    "text-pink-500",                                             // 21+
+    "text-yellow-500 drop-shadow-[0_0_6px_rgba(234,179,8,0.8)]" // Special
+  ];
+  
+  const index = Math.min(Math.floor(sortOrder / 3), colors.length - 1);
+  return colors[index];
 };
 
 type ActivityStatus = "aktiv" | "inaktiv" | "abgemeldet" | "gespraech_noetig";
@@ -86,13 +57,14 @@ const activityStatusConfig: Record<ActivityStatus, { label: string; color: strin
 
 export function TeamList() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRanks, setSelectedRanks] = useState<Rank[]>([]);
+  const [selectedRanks, setSelectedRanks] = useState<string[]>([]);
   const [editingNotesId, setEditingNotesId] = useState<number | null>(null);
   const [notesValue, setNotesValue] = useState("");
   const { user, isAuthenticated } = useAuth();
   const isAdmin = isAuthenticated && user?.role === "admin";
 
   const { data: members, isLoading, error } = trpc.team.list.useQuery();
+  const { data: roles = [] } = trpc.roles.getAll.useQuery();
   const utils = trpc.useUtils();
 
   const updateActivityMutation = trpc.team.updateActivityStatus.useMutation({
@@ -125,30 +97,36 @@ export function TeamList() {
                             member.id.toString().includes(searchQuery) ||
                             (member.discordId && member.discordId.includes(searchQuery));
       const matchesRank = selectedRanks.length === 0 || 
-                          memberRanks.some(r => selectedRanks.includes(r as Rank));
+                          memberRanks.some(r => selectedRanks.includes(r as string));
       return matchesSearch && matchesRank;
     });
   }, [members, searchQuery, selectedRanks]);
 
-  // Group filtered members by their highest rank
+  // Group filtered members by their highest rank (using dynamic roles from DB)
   const groupedMembers = useMemo(() => {
-    return rankHierarchy.reduce((acc, rank) => {
+    if (!roles.length) return {};
+    
+    // Create a map of rank name to sortOrder
+    const rankOrderMap = new Map(roles.map(r => [r.name, r.sortOrder]));
+    
+    return roles.reduce((acc, role) => {
       const rankMembers = filteredMembers.filter((m) => {
         const memberRanks = m.ranks || [];
-        // Get highest rank for this member
-        const highestRankIndex = Math.min(
-          ...memberRanks.map(r => rankHierarchy.indexOf(r as Rank)).filter(i => i >= 0)
+        // Get highest rank (lowest sortOrder) for this member
+        const highestRankOrder = Math.min(
+          ...memberRanks.map(r => rankOrderMap.get(r as string) ?? 999)
         );
-        return rankHierarchy[highestRankIndex] === rank;
+        const highestRank = roles.find(r => r.sortOrder === highestRankOrder);
+        return highestRank?.name === role.name;
       });
       if (rankMembers.length > 0) {
-        acc[rank] = rankMembers;
+        acc[role.name] = rankMembers;
       }
       return acc;
-    }, {} as Record<Rank, typeof filteredMembers>);
-  }, [filteredMembers]);
+    }, {} as Record<string, typeof filteredMembers>);
+  }, [filteredMembers, roles]);
 
-  const toggleRank = (rank: Rank) => {
+  const toggleRank = (rank: string) => {
     setSelectedRanks(prev => 
       prev.includes(rank) ? prev.filter(r => r !== rank) : [...prev, rank]
     );
@@ -254,14 +232,14 @@ export function TeamList() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 max-h-[400px] overflow-y-auto backdrop-blur-xl">
-            {rankHierarchy.map((rank) => (
+            {roles.map((role) => (
               <DropdownMenuCheckboxItem
-                key={rank}
-                checked={selectedRanks.includes(rank)}
-                onCheckedChange={() => toggleRank(rank)}
+                key={role.id}
+                checked={selectedRanks.includes(role.name)}
+                onCheckedChange={() => toggleRank(role.name)}
                 className="focus:bg-red-900/30 focus:text-white hover:bg-red-900/30 cursor-pointer"
               >
-                {rank}
+                {role.displayName}
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuContent>
@@ -286,13 +264,13 @@ export function TeamList() {
             NO OPERATIVES FOUND MATCHING CRITERIA
           </motion.div>
         ) : (
-          rankHierarchy.map((rank) => {
-            const rankMembers = groupedMembers[rank];
+          roles.map((role) => {
+            const rankMembers = groupedMembers[role.name];
             if (!rankMembers) return null;
 
             return (
               <motion.div
-                key={rank}
+                key={role.id}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -301,8 +279,8 @@ export function TeamList() {
               >
                 <div className="flex items-center gap-4">
                   <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-red-900/50 to-transparent" />
-                  <h2 className={`text-2xl font-bold uppercase tracking-widest ${rankColors[rank]} syndikat-text-glow`}>
-                    {rank}
+                  <h2 className={`text-2xl font-bold uppercase tracking-widest ${getRankColor(role.sortOrder)} syndikat-text-glow`}>
+                    {role.displayName.toUpperCase()}
                   </h2>
                   <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-red-900/50 to-transparent" />
                 </div>
@@ -337,11 +315,14 @@ export function TeamList() {
                               {member.name}
                             </CardTitle>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {memberRanks.slice(0, 2).map((r, i) => (
-                                <span key={i} className={`text-[10px] uppercase tracking-wider font-semibold ${rankColors[r as Rank] || 'text-gray-400'}`}>
-                                  {r}
-                                </span>
-                              ))}
+                              {memberRanks.slice(0, 2).map((r, i) => {
+                                const roleObj = roles.find(role => role.name === r);
+                                return (
+                                  <span key={i} className={`text-[10px] uppercase tracking-wider font-semibold ${roleObj ? getRankColor(roleObj.sortOrder) : 'text-gray-400'}`}>
+                                    {roleObj?.displayName || r}
+                                  </span>
+                                );
+                              })}
                               {memberRanks.length > 2 && (
                                 <span className="text-[10px] text-gray-500">+{memberRanks.length - 2}</span>
                               )}

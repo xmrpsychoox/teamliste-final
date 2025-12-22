@@ -289,19 +289,6 @@ export default function Admin() {
     updateRole.mutate({ id: targetRole.id, sortOrder: roles[index].sortOrder });
   };
 
-  const moveVerwaltung = (id: number, direction: 'up' | 'down') => {
-    const index = verwaltungen.findIndex(v => v.id === id);
-    if (index === -1) return;
-    
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= verwaltungen.length) return;
-    
-    const targetVerwaltung = verwaltungen[newIndex];
-    
-    // Swap sortOrder
-    updateVerwaltung.mutate({ id: id, sortOrder: targetVerwaltung.sortOrder });
-    updateVerwaltung.mutate({ id: targetVerwaltung.id, sortOrder: verwaltungen[index].sortOrder });
-  };
 
   // Auth check
   if (authLoading) {
@@ -623,28 +610,8 @@ export default function Admin() {
 
                     {/* Verwaltungen List */}
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {verwaltungen.map((verwaltung, index) => (
+                      {verwaltungen.map((verwaltung) => (
                         <div key={verwaltung.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-orange-900/20">
-                          <div className="flex flex-col gap-1">
-                            <Button
-                              onClick={() => moveVerwaltung(verwaltung.id, 'up')}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 hover:bg-orange-950/30"
-                              disabled={index === 0}
-                            >
-                              <ChevronUp className="h-4 w-4 text-gray-400" />
-                            </Button>
-                            <Button
-                              onClick={() => moveVerwaltung(verwaltung.id, 'down')}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 hover:bg-orange-950/30"
-                              disabled={index === verwaltungen.length - 1}
-                            >
-                              <ChevronDown className="h-4 w-4 text-gray-400" />
-                            </Button>
-                          </div>
                           <div className="flex-1">
                             <div className="font-medium text-white">{verwaltung.displayName}</div>
                             <div className="text-sm text-gray-400">{verwaltung.name}</div>
