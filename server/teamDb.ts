@@ -29,7 +29,7 @@ export async function getAllTeamMembers(): Promise<TeamMember[]> {
     
     return aHighestIndex - bHighestIndex;
   });
-}
+
 
 export async function getTeamMemberById(id: number): Promise<TeamMember | undefined> {
   const db = await getDb();
