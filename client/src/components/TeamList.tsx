@@ -363,7 +363,7 @@ export function TeamList() {
                         >
                           <div className="flex items-center space-x-3">
                             <Avatar className="h-10 w-10 border-2 border-red-500/50">
-                              <AvatarImage src={member.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${member.id}`} alt={member.name} />
+                              <AvatarImage src="/images/Farbe_1337.gif" alt={member.name} />
                               <AvatarFallback className="bg-red-900/50 text-white">{member.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -374,11 +374,12 @@ export function TeamList() {
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className={`h-8 w-8 rounded-full ${statusConfig.bgColor}/20 ${statusConfig.color} hover:${statusConfig.bgColor}/40 border border-current/30`}
+                                    variant="outline" 
+                                    size="sm" 
+                                    className={`text-xs ${statusConfig.bgColor}/20 ${statusConfig.color} hover:${statusConfig.bgColor}/40 border-current/30`}
                                   >
-                                    {statusConfig.icon}
+                                    <span className="mr-1">{statusConfig.icon}</span>
+                                    {statusConfig.label}
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 backdrop-blur-xl">

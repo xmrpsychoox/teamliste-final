@@ -21,28 +21,23 @@ function isSecureRequest(req: Request) {
   return protoList.some(proto => proto.trim().toLowerCase() === "https");
 }
 
+function isLocalhost(req: Request): boolean {
+  const hostname = req.hostname;
+  return LOCAL_HOSTS.has(hostname) || isIpAddress(hostname);
+}
+
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
+  const isLocal = isLocalhost(req);
+  const isSecure = isSecureRequest(req);
 
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
-
+  // For localhost (development), use 'lax' sameSite and don't require secure
+  // For production (HTTPS), use 'none' sameSite with secure
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    sameSite: isLocal ? "lax" : "none",
+    secure: isLocal ? false : isSecure,
   };
 }

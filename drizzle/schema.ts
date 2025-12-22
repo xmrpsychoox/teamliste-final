@@ -2,10 +2,12 @@ import { mysqlTable, int, varchar, boolean, timestamp, json } from "drizzle-orm/
 
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
-  openId: varchar("openId", { length: 64 }).notNull(),
+  username: varchar("username", { length: 255 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  openId: varchar("openId", { length: 64 }),
   name: varchar("name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 320 }).notNull(),
-  loginMethod: varchar("loginMethod", { length: 64 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  loginMethod: varchar("loginMethod", { length: 64 }).notNull().default("custom"),
   role: varchar("role", { length: 20 }).notNull().default("user"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
