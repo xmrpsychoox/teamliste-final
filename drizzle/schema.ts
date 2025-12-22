@@ -41,3 +41,46 @@ export const verwaltungen = mysqlTable("verwaltungen", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
+
+// Available ranks for team members
+export const availableRanks = [
+  "Projektleitung",
+  "Stv.Projektleitung",
+  "Leadership",
+  "Head-Admin",
+  "Admin",
+  "T-Admin",
+  "Head-Moderation",
+  "Moderation",
+  "T-Moderation",
+  "Head-Support",
+  "Support",
+  "T-Support",
+  "Head-Analyst",
+  "Analyst",
+  "Developer",
+  "Development Cars",
+  "Development Mapping",
+  "Development Kleidung",
+  "Medien Gestalter",
+  "Highteam"
+] as const;
+
+export type AvailableRank = typeof availableRanks[number];
+
+// Available Verwaltungen for team members
+export const availableVerwaltungen = [
+  "Frakverwaltungs Leitung",
+  "Frakverwaltung",
+  "Eventmanagement",
+  "Teamverwaltungs Leitung",
+  "Teamverwaltung",
+  "Regelwerkteam",
+  "Teamüberwachung",
+  "Support Leitung",
+  "Mod Leitung",
+  "Spendenverwaltung",
+  "Streamingverwaltung"
+] as const;
+
+export type AvailableVerwaltung = typeof availableVerwaltungen[number];
