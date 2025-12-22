@@ -65,9 +65,7 @@ export async function authenticateUser(username: string, password: string) {
 
   const user = result[0];
 
-  if (!user.passwordHash) {
-    return null;
-  }
+
 
   const isValid = await verifyPassword(password, user.passwordHash);
 
