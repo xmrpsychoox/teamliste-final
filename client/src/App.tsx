@@ -8,7 +8,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import PasswordReset from "./pages/PasswordReset";
-import AdminSettings from "./pages/AdminSettings";
+
 
 
 function Router() {
@@ -19,7 +19,6 @@ function Router() {
       <Route path={"/admin"} component={Admin} />
       <Route path={"/password-reset"} component={PasswordReset} />
       <Route path={"/404"} component={NotFound} />
-      <Route path={"/admin-settings"} component={AdminSettings} />
 
       {/* Final fallback route */}
       <Route component={NotFound} />

@@ -29,49 +29,9 @@ import {
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Users, Shield, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Users, Shield, Loader2, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { getLoginUrl } from "@/const";
-
-const ranks = [
-  "Projektleitung",
-  "Stv.Projektleitung",
-  "Leadership",
-  "Head-Admin",
-  "Admin",
-  "T-Admin",
-  "Head-Moderation",
-  "Moderation",
-  "T-Moderation",
-  "Head-Support",
-  "Support",
-  "T-Support",
-  "Head-Analyst",
-  "Analyst",
-  "Developer",
-  "Development Cars",
-  "Development Mapping",
-  "Development Kleidung",
-  "Medien Gestalter",
-  "Highteam"
-] as const;
-
-const verwaltungen = [
-  "Frakverwaltungs Leitung",
-  "Frakverwaltung",
-  "Eventmanagement",
-  "Teamverwaltungs Leitung",
-  "Teamverwaltung",
-  "Regelwerkteam",
-  "Teamüberwachung",
-  "Support Leitung",
-  "Mod Leitung",
-  "Spendenverwaltung",
-  "Streamingverwaltung"
-] as const;
-
-type Rank = typeof ranks[number];
-type Verwaltung = typeof verwaltungen[number];
 
 export default function Admin() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -79,6 +39,7 @@ export default function Admin() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<number | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -95,16 +56,33 @@ export default function Admin() {
 
   // Form state
   const [formName, setFormName] = useState("");
-  const [formRanks, setFormRanks] = useState<Rank[]>([]);
-  const [formVerwaltungen, setFormVerwaltungen] = useState<Verwaltung[]>([]);
+  const [formRanks, setFormRanks] = useState<string[]>([]);
+  const [formVerwaltungen, setFormVerwaltungen] = useState<string[]>([]);
   const [formDiscordId, setFormDiscordId] = useState("");
   const [formNotes, setFormNotes] = useState("");
 
+  // Settings form state
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDisplayName, setNewRoleDisplayName] = useState("");
+  const [newVerwaltungName, setNewVerwaltungName] = useState("");
+  const [newVerwaltungDisplayName, setNewVerwaltungDisplayName] = useState("");
+
   const utils = trpc.useUtils();
+  
+  // Fetch members
   const { data: members, isLoading } = trpc.team.list.useQuery(undefined, {
     enabled: isAuthenticated && user?.role === 'admin'
   });
 
+  // Fetch roles and verwaltungen from database
+  const { data: roles = [] } = trpc.roles.getAll.useQuery(undefined, {
+    enabled: isAuthenticated && user?.role === 'admin'
+  });
+  const { data: verwaltungen = [] } = trpc.verwaltungen.getAll.useQuery(undefined, {
+    enabled: isAuthenticated && user?.role === 'admin'
+  });
+
+  // Mutations for members
   const createMutation = trpc.team.create.useMutation({
     onSuccess: () => {
       utils.team.list.invalidate();
@@ -133,6 +111,70 @@ export default function Admin() {
     onSuccess: () => {
       utils.team.list.invalidate();
       toast.success("Teammitglied erfolgreich gelöscht");
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
+  // Mutations for roles
+  const createRole = trpc.roles.create.useMutation({
+    onSuccess: () => {
+      utils.roles.getAll.invalidate();
+      toast.success("Rolle erfolgreich erstellt");
+      setNewRoleName("");
+      setNewRoleDisplayName("");
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
+  const deleteRole = trpc.roles.delete.useMutation({
+    onSuccess: () => {
+      utils.roles.getAll.invalidate();
+      toast.success("Rolle erfolgreich gelöscht");
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
+  const updateRole = trpc.roles.update.useMutation({
+    onSuccess: () => {
+      utils.roles.getAll.invalidate();
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
+  // Mutations for verwaltungen
+  const createVerwaltung = trpc.verwaltungen.create.useMutation({
+    onSuccess: () => {
+      utils.verwaltungen.getAll.invalidate();
+      toast.success("Verwaltung erfolgreich erstellt");
+      setNewVerwaltungName("");
+      setNewVerwaltungDisplayName("");
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
+  const deleteVerwaltung = trpc.verwaltungen.delete.useMutation({
+    onSuccess: () => {
+      utils.verwaltungen.getAll.invalidate();
+      toast.success("Verwaltung erfolgreich gelöscht");
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
+  const updateVerwaltung = trpc.verwaltungen.update.useMutation({
+    onSuccess: () => {
+      utils.verwaltungen.getAll.invalidate();
     },
     onError: (error) => {
       toast.error(`Fehler: ${error.message}`);
@@ -186,23 +228,49 @@ export default function Admin() {
 
   const openEditDialog = (member: NonNullable<typeof members>[number]) => {
     setFormName(member.name);
-    setFormRanks((member.ranks || []) as Rank[]);
-    setFormVerwaltungen((member.verwaltungen || []) as Verwaltung[]);
+    setFormRanks((member.ranks || []) as string[]);
+    setFormVerwaltungen((member.verwaltungen || []) as string[]);
     setFormDiscordId(member.discordId || "");
     setFormNotes(member.notes || "");
     setEditingMember(member.id);
   };
 
-  const toggleRank = (rank: Rank) => {
+  const toggleRank = (rank: string) => {
     setFormRanks(prev => 
       prev.includes(rank) ? prev.filter(r => r !== rank) : [...prev, rank]
     );
   };
 
-  const toggleVerwaltung = (verwaltung: Verwaltung) => {
+  const toggleVerwaltung = (verwaltung: string) => {
     setFormVerwaltungen(prev => 
       prev.includes(verwaltung) ? prev.filter(v => v !== verwaltung) : [...prev, verwaltung]
     );
+  };
+
+  const handleCreateRole = () => {
+    if (!newRoleName.trim() || !newRoleDisplayName.trim()) {
+      toast.error("Name und Anzeigename sind erforderlich");
+      return;
+    }
+    createRole.mutate({
+      name: newRoleName,
+      displayName: newRoleDisplayName,
+      isListed: true,
+      sortOrder: roles.length,
+    });
+  };
+
+  const handleCreateVerwaltung = () => {
+    if (!newVerwaltungName.trim() || !newVerwaltungDisplayName.trim()) {
+      toast.error("Name und Anzeigename sind erforderlich");
+      return;
+    }
+    createVerwaltung.mutate({
+      name: newVerwaltungName,
+      displayName: newVerwaltungDisplayName,
+      isListed: true,
+      sortOrder: verwaltungen.length,
+    });
   };
 
   // Auth check
@@ -243,30 +311,34 @@ export default function Admin() {
     );
   }
 
+  // Get only listed roles and verwaltungen
+  const listedRoles = roles.filter(r => r.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
+  const listedVerwaltungen = verwaltungen.filter(v => v.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
+
   const RankSelector = () => (
     <div className="space-y-2">
       <Label>Ränge *</Label>
       <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto p-2 bg-black/20 rounded-lg border border-red-900/20">
-        {ranks.map((rank) => (
-          <div key={rank} className="flex items-center space-x-2">
+        {listedRoles.map((role) => (
+          <div key={role.id} className="flex items-center space-x-2">
             <Checkbox
-              id={`rank-${rank}`}
-              checked={formRanks.includes(rank)}
-              onCheckedChange={() => toggleRank(rank)}
+              id={`rank-${role.id}`}
+              checked={formRanks.includes(role.name)}
+              onCheckedChange={() => toggleRank(role.name)}
               className="border-red-900/50 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
             />
             <label
-              htmlFor={`rank-${rank}`}
+              htmlFor={`rank-${role.id}`}
               className="text-sm text-gray-300 cursor-pointer hover:text-white"
             >
-              {rank}
+              {role.displayName}
             </label>
           </div>
         ))}
       </div>
       {formRanks.length > 0 && (
         <p className="text-xs text-gray-500">
-          Ausgewählt: {formRanks.join(", ")}
+          Ausgewählt: {formRanks.map(r => listedRoles.find(lr => lr.name === r)?.displayName || r).join(", ")}
         </p>
       )}
     </div>
@@ -276,26 +348,26 @@ export default function Admin() {
     <div className="space-y-2">
       <Label>Verwaltungen (optional)</Label>
       <div className="grid grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-2 bg-black/20 rounded-lg border border-orange-900/20">
-        {verwaltungen.map((verwaltung) => (
-          <div key={verwaltung} className="flex items-center space-x-2">
+        {listedVerwaltungen.map((verwaltung) => (
+          <div key={verwaltung.id} className="flex items-center space-x-2">
             <Checkbox
-              id={`verwaltung-${verwaltung}`}
-              checked={formVerwaltungen.includes(verwaltung)}
-              onCheckedChange={() => toggleVerwaltung(verwaltung)}
+              id={`verwaltung-${verwaltung.id}`}
+              checked={formVerwaltungen.includes(verwaltung.name)}
+              onCheckedChange={() => toggleVerwaltung(verwaltung.name)}
               className="border-orange-900/50 data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
             />
             <label
-              htmlFor={`verwaltung-${verwaltung}`}
+              htmlFor={`verwaltung-${verwaltung.id}`}
               className="text-sm text-gray-300 cursor-pointer hover:text-white"
             >
-              {verwaltung}
+              {verwaltung.displayName}
             </label>
           </div>
         ))}
       </div>
       {formVerwaltungen.length > 0 && (
         <p className="text-xs text-orange-400">
-          Ausgewählt: {formVerwaltungen.join(", ")}
+          Ausgewählt: {formVerwaltungen.map(v => listedVerwaltungen.find(lv => lv.name === v)?.displayName || v).join(", ")}
         </p>
       )}
     </div>
@@ -319,152 +391,355 @@ export default function Admin() {
           <div className="flex items-center gap-4">
             <Link href="/">
               <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                <ArrowLeft className="h-4 w-4 mr-2" />
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Zurück
               </Button>
             </Link>
-            <div className="flex items-center gap-2">
-              <Users className="h-6 w-6 text-red-500" />
-              <h1 className="text-xl font-bold tracking-wider">TEAM VERWALTUNG</h1>
+            <div className="flex items-center gap-3">
+              <Shield className="h-8 w-8 text-red-500" />
+              <div>
+                <h1 className="text-xl font-bold">Admin Panel</h1>
+                <p className="text-sm text-gray-400">Teammitglieder verwalten</p>
+              </div>
             </div>
           </div>
-
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-red-600 hover:bg-red-700" onClick={resetForm}>
-                <Plus className="h-4 w-4 mr-2" />
-                Neues Mitglied
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Neues Teammitglied erstellen</DialogTitle>
-                <DialogDescription className="text-gray-400">
-                  Fügen Sie ein neues Mitglied zum Team hinzu.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
-                  <Input
-                    id="name"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Discord Username"
-                    className="bg-black/40 border-red-900/30"
-                  />
-                </div>
-                <RankSelector />
-                <VerwaltungSelector />
-                <div className="space-y-2">
-                  <Label htmlFor="discordId">Discord ID</Label>
-                  <Input
-                    id="discordId"
-                    value={formDiscordId}
-                    onChange={(e) => setFormDiscordId(e.target.value)}
-                    placeholder="123456789012345678"
-                    className="bg-black/40 border-red-900/30"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notizen</Label>
-                  <Textarea
-                    id="notes"
-                    value={formNotes}
-                    onChange={(e) => setFormNotes(e.target.value)}
-                    placeholder="Zusätzliche Informationen..."
-                    className="bg-black/40 border-red-900/30 min-h-[80px]"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)} className="border-gray-700">
-                  Abbrechen
-                </Button>
-                <Button 
-                  onClick={handleCreate} 
-                  className="bg-red-600 hover:bg-red-700"
-                  disabled={createMutation.isPending}
-                >
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Erstellen
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-400">
+              Angemeldet als <span className="text-white font-medium">{user?.username}</span>
+            </span>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <Users className="h-6 w-6 text-red-500" />
+            <h2 className="text-2xl font-bold">Teammitglieder</h2>
+            {!isLoading && members && (
+              <span className="text-sm text-gray-400">({members.length})</span>
+            )}
+          </div>
+          <div className="flex gap-3">
+            {/* Settings Dialog */}
+            <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-gray-700 hover:bg-gray-600">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Ränge & Verwaltungen verwalten
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Ränge & Verwaltungen verwalten</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    Erstellen, bearbeiten und löschen Sie Ränge und Verwaltungen
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-8 py-4">
+                  {/* Roles Section */}
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4 text-red-400">Rollen verwalten</h3>
+                    
+                    {/* Create Role Form */}
+                    <div className="bg-black/40 p-4 rounded-lg mb-4 border border-red-900/20">
+                      <h4 className="text-sm font-medium mb-3 text-gray-300">Neue Rolle erstellen</h4>
+                      <div className="flex gap-3">
+                        <Input
+                          type="text"
+                          placeholder="Name (z.B. admin)"
+                          value={newRoleName}
+                          onChange={(e) => setNewRoleName(e.target.value)}
+                          className="flex-1 bg-black/20 border-red-900/30"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Anzeigename (z.B. Administrator)"
+                          value={newRoleDisplayName}
+                          onChange={(e) => setNewRoleDisplayName(e.target.value)}
+                          className="flex-1 bg-black/20 border-red-900/30"
+                        />
+                        <Button
+                          onClick={handleCreateRole}
+                          className="bg-red-600 hover:bg-red-700"
+                          disabled={createRole.isPending}
+                        >
+                          {createRole.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Erstellen
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Roles List */}
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {roles.map((role) => (
+                        <div key={role.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-red-900/20">
+                          <div className="flex-1">
+                            <div className="font-medium text-white">{role.displayName}</div>
+                            <div className="text-sm text-gray-400">{role.name}</div>
+                          </div>
+                          <label className="flex items-center gap-2">
+                            <Checkbox
+                              checked={role.isListed}
+                              onCheckedChange={(checked) =>
+                                updateRole.mutate({ id: role.id, isListed: checked as boolean })
+                              }
+                              className="border-red-900/50 data-[state=checked]:bg-red-600"
+                            />
+                            <span className="text-sm text-gray-300">Gelistet</span>
+                          </label>
+                          <Button
+                            onClick={() => deleteRole.mutate({ id: role.id })}
+                            variant="outline"
+                            size="sm"
+                            className="border-red-900/50 hover:bg-red-950/30 text-red-400"
+                            disabled={deleteRole.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Verwaltungen Section */}
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4 text-orange-400">Verwaltungen verwalten</h3>
+                    
+                    {/* Create Verwaltung Form */}
+                    <div className="bg-black/40 p-4 rounded-lg mb-4 border border-orange-900/20">
+                      <h4 className="text-sm font-medium mb-3 text-gray-300">Neue Verwaltung erstellen</h4>
+                      <div className="flex gap-3">
+                        <Input
+                          type="text"
+                          placeholder="Name (z.B. eventmanagement)"
+                          value={newVerwaltungName}
+                          onChange={(e) => setNewVerwaltungName(e.target.value)}
+                          className="flex-1 bg-black/20 border-orange-900/30"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Anzeigename (z.B. Eventmanagement)"
+                          value={newVerwaltungDisplayName}
+                          onChange={(e) => setNewVerwaltungDisplayName(e.target.value)}
+                          className="flex-1 bg-black/20 border-orange-900/30"
+                        />
+                        <Button
+                          onClick={handleCreateVerwaltung}
+                          className="bg-orange-600 hover:bg-orange-700"
+                          disabled={createVerwaltung.isPending}
+                        >
+                          {createVerwaltung.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Erstellen
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Verwaltungen List */}
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {verwaltungen.map((verwaltung) => (
+                        <div key={verwaltung.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-orange-900/20">
+                          <div className="flex-1">
+                            <div className="font-medium text-white">{verwaltung.displayName}</div>
+                            <div className="text-sm text-gray-400">{verwaltung.name}</div>
+                          </div>
+                          <label className="flex items-center gap-2">
+                            <Checkbox
+                              checked={verwaltung.isListed}
+                              onCheckedChange={(checked) =>
+                                updateVerwaltung.mutate({ id: verwaltung.id, isListed: checked as boolean })
+                              }
+                              className="border-orange-900/50 data-[state=checked]:bg-orange-600"
+                            />
+                            <span className="text-sm text-gray-300">Gelistet</span>
+                          </label>
+                          <Button
+                            onClick={() => deleteVerwaltung.mutate({ id: verwaltung.id })}
+                            variant="outline"
+                            size="sm"
+                            className="border-orange-900/50 hover:bg-orange-950/30 text-orange-400"
+                            disabled={deleteVerwaltung.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="border-gray-700">
+                    Schließen
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Create Member Dialog */}
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-red-600 hover:bg-red-700">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Neues Mitglied
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Neues Teammitglied erstellen</DialogTitle>
+                  <DialogDescription className="text-gray-400">
+                    Fügen Sie ein neues Mitglied zum Team hinzu
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                      id="name"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="Max Mustermann"
+                      className="bg-black/20 border-red-900/30"
+                    />
+                  </div>
+                  <RankSelector />
+                  <VerwaltungSelector />
+                  <div className="space-y-2">
+                    <Label htmlFor="discordId">Discord ID</Label>
+                    <Input
+                      id="discordId"
+                      value={formDiscordId}
+                      onChange={(e) => setFormDiscordId(e.target.value)}
+                      placeholder="123456789012345678"
+                      className="bg-black/20 border-red-900/30"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notizen</Label>
+                    <Textarea
+                      id="notes"
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      placeholder="Zusätzliche Informationen..."
+                      className="bg-black/20 border-red-900/30 min-h-[100px]"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)} className="border-gray-700">
+                    Abbrechen
+                  </Button>
+                  <Button 
+                    onClick={handleCreate} 
+                    className="bg-red-600 hover:bg-red-700"
+                    disabled={createMutation.isPending}
+                  >
+                    {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Erstellen
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-red-500" />
           </div>
         ) : !members || members.length === 0 ? (
-          <Card className="bg-black/40 border-red-900/30 text-center py-12">
-            <CardContent>
-              <Users className="h-16 w-16 mx-auto text-gray-600 mb-4" />
-              <p className="text-gray-400">Noch keine Teammitglieder vorhanden.</p>
-              <p className="text-gray-500 text-sm mt-2">Klicken Sie auf "Neues Mitglied", um zu beginnen.</p>
+          <Card className="bg-gray-900/50 border-red-900/20">
+            <CardContent className="py-12 text-center">
+              <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+              <p className="text-gray-400">Noch keine Teammitglieder vorhanden</p>
+              <p className="text-sm text-gray-500 mt-2">Klicken Sie auf "Neues Mitglied", um zu beginnen</p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {members.map((member, index) => (
               <motion.div
                 key={member.id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <Card className="bg-black/40 border-red-900/30 hover:border-red-500/30 transition-colors">
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="relative">
-                        <div className="h-12 w-12 rounded-full bg-red-950 flex items-center justify-center text-red-200 font-bold">
-                          {member.name.substring(0, 2).toUpperCase()}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-white">{member.name}</h3>
-                        <p className="text-sm text-red-400 truncate">
-                          {(member.ranks || []).join(", ") || "Kein Rang"}
-                        </p>
-                        {member.verwaltungen && (member.verwaltungen as string[]).length > 0 && (
-                          <p className="text-xs text-orange-400 truncate">
-                            {(member.verwaltungen as string[]).join(", ")}
-                          </p>
-                        )}
+                <Card className="bg-gray-900/50 border-red-900/20 hover:border-red-900/40 transition-colors">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{member.name}</h3>
                         {member.discordId && (
-                          <p className="text-xs text-gray-500 font-mono">ID: {member.discordId}</p>
+                          <p className="text-sm text-gray-500">ID: {member.discordId}</p>
                         )}
                       </div>
-                      {member.notes && (
-                        <div className="hidden md:block max-w-xs">
-                          <p className="text-xs text-gray-500 truncate" title={member.notes}>
-                            📝 {member.notes}
-                          </p>
-                        </div>
-                      )}
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    {member.ranks && member.ranks.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-xs text-gray-500 mb-2">Ränge:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(member.ranks as string[]).map((rank) => {
+                            const roleObj = roles.find(r => r.name === rank);
+                            return (
+                              <span
+                                key={rank}
+                                className="px-2 py-1 bg-red-950/30 text-red-400 text-xs rounded border border-red-900/30"
+                              >
+                                {roleObj?.displayName || rank}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {member.verwaltungen && member.verwaltungen.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-xs text-gray-500 mb-2">Verwaltungen:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(member.verwaltungen as string[]).map((verwaltung) => {
+                            const verwaltungObj = verwaltungen.find(v => v.name === verwaltung);
+                            return (
+                              <span
+                                key={verwaltung}
+                                className="px-2 py-1 bg-orange-950/30 text-orange-400 text-xs rounded border border-orange-900/30"
+                              >
+                                {verwaltungObj?.displayName || verwaltung}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {member.notes && (
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-500 mb-1">Notizen:</p>
+                        <p className="text-sm text-gray-400">{member.notes}</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mt-4">
                       <Dialog open={editingMember === member.id} onOpenChange={(open) => !open && setEditingMember(null)}>
                         <DialogTrigger asChild>
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            className="border-gray-700 hover:border-red-500/50"
+                            className="flex-1 border-gray-700 hover:border-red-500 hover:bg-red-950/30"
                             onClick={() => openEditDialog(member)}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Bearbeiten
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Teammitglied bearbeiten</DialogTitle>
                             <DialogDescription className="text-gray-400">
-                              Ändern Sie die Details des Teammitglieds.
+                              Ändern Sie die Informationen des Teammitglieds
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4 py-4">
@@ -474,7 +749,8 @@ export default function Admin() {
                                 id="edit-name"
                                 value={formName}
                                 onChange={(e) => setFormName(e.target.value)}
-                                className="bg-black/40 border-red-900/30"
+                                placeholder="Max Mustermann"
+                                className="bg-black/20 border-red-900/30"
                               />
                             </div>
                             <RankSelector />
@@ -485,7 +761,8 @@ export default function Admin() {
                                 id="edit-discordId"
                                 value={formDiscordId}
                                 onChange={(e) => setFormDiscordId(e.target.value)}
-                                className="bg-black/40 border-red-900/30"
+                                placeholder="123456789012345678"
+                                className="bg-black/20 border-red-900/30"
                               />
                             </div>
                             <div className="space-y-2">
@@ -494,7 +771,8 @@ export default function Admin() {
                                 id="edit-notes"
                                 value={formNotes}
                                 onChange={(e) => setFormNotes(e.target.value)}
-                                className="bg-black/40 border-red-900/30 min-h-[80px]"
+                                placeholder="Zusätzliche Informationen..."
+                                className="bg-black/20 border-red-900/30 min-h-[100px]"
                               />
                             </div>
                           </div>
