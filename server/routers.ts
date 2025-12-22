@@ -17,11 +17,12 @@ import { getDb } from "./db";
 import { roles, verwaltungen } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
-// Zod schema for rank validation
-const rankSchema = z.enum([
 // Simplified validation - ranks and verwaltungen are now dynamic
 const rankSchema = z.string().min(1).max(100);
 const verwaltungSchema = z.string().min(1).max(100);
+
+// Activity status schema
+const activityStatusSchema = z.enum(["aktiv", "inaktiv", "urlaub", "ausgeschieden"]);
 
 // Admin-only procedure
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -30,6 +31,7 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
 // Roles Router
 const rolesRouter = router({
   getAll: publicProcedure.query(async () => {
@@ -219,17 +221,17 @@ export const appRouter = router({
 
     // Protected: Get available ranks (requires login)
     ranks: protectedProcedure.query(async () => {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return await db.select().from(roles).where(eq(roles.isListed, true)).orderBy(roles.sortOrder);
-}),
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(roles).where(eq(roles.isListed, true)).orderBy(roles.sortOrder);
+    }),
 
     // Protected: Get available Verwaltungen (requires login)
     verwaltungen: protectedProcedure.query(async () => {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return await db.select().from(verwaltungen).where(eq(verwaltungen.isListed, true)).orderBy(verwaltungen.sortOrder);
-}),
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(verwaltungen).where(eq(verwaltungen.isListed, true)).orderBy(verwaltungen.sortOrder);
+    }),
 
     // Admin: Create team member
     create: adminProcedure
@@ -331,9 +333,8 @@ export const appRouter = router({
         return updated;
       }),
   }),
-    roles: rolesRouter,
+  roles: rolesRouter,
   verwaltungen: verwaltungenRouter,
-
 });
 
 export type AppRouter = typeof appRouter;
