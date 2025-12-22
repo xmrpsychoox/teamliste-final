@@ -16,7 +16,20 @@ export async function getAllTeamMembers(): Promise<TeamMember[]> {
     return [];
   }
 
-  const members = await db.select().from(teamMembers);
+  const members = await db.select({
+    id: teamMembers.id,
+    name: teamMembers.name,
+    ranks: teamMembers.ranks,
+    discordId: teamMembers.discordId,
+    avatarUrl: teamMembers.avatarUrl,
+    activityStatus: teamMembers.activityStatus,
+    notes: teamMembers.notes,
+    verwaltungen: teamMembers.verwaltungen,
+    joinDate: teamMembers.joinDate,
+    createdAt: teamMembers.createdAt,
+    updatedAt: teamMembers.updatedAt,
+}).from(teamMembers);
+
   
   // Sort by the highest rank in their ranks array
   return members.sort((a, b) => {
