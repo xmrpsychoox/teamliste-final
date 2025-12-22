@@ -152,14 +152,13 @@ export async function resetUserPassword(
     throw new Error("Database not available");
   }
 
-  console.log("[DEBUG] Master password from ENV:", ENV.masterPassword);
-  console.log("[DEBUG] Master password from input:", masterPassword);
-  console.log("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
+console.error("[DEBUG] Master password from ENV:", ENV.masterPassword);
+console.error("[DEBUG] Master password from input:", masterPassword);
+console.error("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
 
-
-  if (masterPassword !== ENV.masterPassword) {
-    throw new Error("Invalid master password");
-  }
+if (masterPassword !== ENV.masterPassword) {
+  throw new Error(`Invalid master password. Expected: '${ENV.masterPassword}', Got: '${masterPassword}', ENV var: '${process.env.MASTER_PASSWORD}'`);
+}
 
   const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
 
