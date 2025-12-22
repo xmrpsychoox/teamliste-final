@@ -154,6 +154,8 @@ export async function resetUserPassword(
 
   console.log("[DEBUG] Master password from ENV:", ENV.masterPassword);
   console.log("[DEBUG] Master password from input:", masterPassword);
+  console.log("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
+
 
   if (masterPassword !== ENV.masterPassword) {
     throw new Error("Invalid master password");
