@@ -12,8 +12,6 @@ import {
   createTeamMember, 
   updateTeamMember, 
   deleteTeamMember,
-  availableRanks,
-  availableVerwaltungen
 } from "./teamDb";
 import { getDb } from "./db";
 import { roles, verwaltungen } from "../drizzle/schema";
@@ -255,14 +253,18 @@ export const appRouter = router({
       }),
 
     // Protected: Get available ranks (requires login)
-    ranks: protectedProcedure.query(() => {
-      return availableRanks;
-    }),
+    ranks: protectedProcedure.query(async () => {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.select().from(roles).where(eq(roles.isListed, true)).orderBy(roles.sortOrder);
+}),
 
     // Protected: Get available Verwaltungen (requires login)
-    verwaltungen: protectedProcedure.query(() => {
-      return availableVerwaltungen;
-    }),
+    verwaltungen: protectedProcedure.query(async () => {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.select().from(verwaltungen).where(eq(verwaltungen.isListed, true)).orderBy(verwaltungen.sortOrder);
+}),
 
     // Admin: Create team member
     create: adminProcedure
