@@ -49,10 +49,10 @@ const getRankColor = (sortOrder: number): string => {
 type ActivityStatus = "aktiv" | "inaktiv" | "abgemeldet" | "gespraech_noetig";
 
 const activityStatusConfig: Record<ActivityStatus, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
-  "aktiv": { label: "Aktiv", color: "text-green-400", bgColor: "bg-green-500", icon: <UserCheck className="h-3 w-3" /> },
-  "inaktiv": { label: "Inaktiv", color: "text-yellow-400", bgColor: "bg-yellow-500", icon: <Clock className="h-3 w-3" /> },
-  "abgemeldet": { label: "Abgemeldet", color: "text-gray-400", bgColor: "bg-gray-500", icon: <UserX className="h-3 w-3" /> },
-  "gespraech_noetig": { label: "Gespräch nötig", color: "text-red-400", bgColor: "bg-red-500", icon: <MessageCircle className="h-3 w-3" /> },
+  "aktiv": { label: "Aktiv", color: "text-green-400", bgColor: "bg-green-500", icon: <UserCheck className="h-4 w-4" /> },
+  "inaktiv": { label: "Inaktiv", color: "text-yellow-400", bgColor: "bg-yellow-500", icon: <Clock className="h-4 w-4" /> },
+  "abgemeldet": { label: "Abgemeldet", color: "text-gray-400", bgColor: "bg-gray-500", icon: <UserX className="h-4 w-4" /> },
+  "gespraech_noetig": { label: "Gespräch nötig", color: "text-red-400", bgColor: "bg-red-500", icon: <MessageCircle className="h-4 w-4" /> },
 };
 
 export function TeamList() {
@@ -65,6 +65,8 @@ export function TeamList() {
 
   const { data: members, isLoading, error } = trpc.team.list.useQuery();
   const { data: roles = [] } = trpc.roles.getAll.useQuery();
+  // NEU: Verwaltungen abrufen
+  const { data: verwaltungen = [] } = trpc.verwaltungen.getAll.useQuery();
   const utils = trpc.useUtils();
 
   const updateActivityMutation = trpc.team.updateActivityStatus.useMutation({
@@ -92,6 +94,11 @@ export function TeamList() {
   const rankOrderMap = useMemo(() => {
     return new Map(roles.map(r => [r.name, r.sortOrder]));
   }, [roles]);
+
+  // NEU: Erstelle eine Map von Verwaltungsname zu Anzeigename
+  const verwaltungenMap = useMemo(() => {
+    return new Map(verwaltungen.map(v => [v.name, v.displayName]));
+  }, [verwaltungen]);
 
   // Filter members based on search and selected ranks
   const filteredMembers = useMemo(() => {
@@ -366,7 +373,11 @@ export function TeamList() {
                             {isAdmin && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-red-400">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className={`h-8 w-8 rounded-full ${statusConfig.bgColor}/20 ${statusConfig.color} hover:${statusConfig.bgColor}/40 border border-current/30`}
+                                  >
                                     {statusConfig.icon}
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -389,6 +400,7 @@ export function TeamList() {
                           </div>
                           
                           <div className="mt-2 space-y-1">
+                            {/* RÄNGE ANZEIGEN */}
                             <div className="flex flex-wrap gap-1">
                               {(member.ranks || []).map((rank, index) => {
                                 const role = roles.find(r => r.name === rank);
@@ -407,6 +419,24 @@ export function TeamList() {
                                 </Badge>
                               )}
                             </div>
+                            
+                            {/* NEU: VERWALTUNGEN ANZEIGEN */}
+                            {(member.verwaltungen && member.verwaltungen.length > 0) && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {member.verwaltungen.map((verwaltung, index) => {
+                                  const displayName = verwaltungenMap.get(verwaltung as string) || verwaltung;
+                                  return (
+                                    <Badge 
+                                      key={index} 
+                                      variant="outline" 
+                                      className="text-xs text-blue-400 border-blue-400 bg-transparent"
+                                    >
+                                      {displayName}
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
                             
                             {isAdmin && (
                               <div className="mt-2 pt-2 border-t border-red-900/30">
