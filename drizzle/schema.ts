@@ -1,4 +1,5 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, boolean } from "drizzle-orm/mysql-core";
+
 
 /**
  * Core user table backing auth flow.
@@ -110,3 +111,25 @@ export const teamMembers = mysqlTable("team_members", {
 
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type InsertTeamMember = typeof teamMembers.$inferInsert;
+
+// Roles table
+export const roles = mysqlTable("roles", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 100 }).notNull(),
+  isListed: boolean("isListed").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// Verwaltungen (Administrations) table
+export const verwaltungen = mysqlTable("verwaltungen", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 100 }).notNull(),
+  isListed: boolean("isListed").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

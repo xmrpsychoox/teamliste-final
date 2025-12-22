@@ -15,6 +15,9 @@ import {
   availableRanks,
   availableVerwaltungen
 } from "./teamDb";
+import { getDb } from "./db";
+import { roles, verwaltungen } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 // Zod schema for rank validation
 const rankSchema = z.enum([
@@ -63,6 +66,95 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
   }
   return next({ ctx });
+});
+// Roles Router
+const rolesRouter = router({
+  getAll: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return await db.select().from(roles).orderBy(roles.sortOrder);
+  }),
+
+  create: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(100),
+      displayName: z.string().min(1).max(100),
+      isListed: z.boolean().default(true),
+      sortOrder: z.number().default(0),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.insert(roles).values(input);
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.delete(roles).where(eq(roles.id, input.id));
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).max(100).optional(),
+      displayName: z.string().min(1).max(100).optional(),
+      isListed: z.boolean().optional(),
+      sortOrder: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { id, ...data } = input;
+      return await db.update(roles).set(data).where(eq(roles.id, id));
+    }),
+});
+
+// Verwaltungen Router
+const verwaltungenRouter = router({
+  getAll: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return await db.select().from(verwaltungen).orderBy(verwaltungen.sortOrder);
+  }),
+
+  create: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(100),
+      displayName: z.string().min(1).max(100),
+      isListed: z.boolean().default(true),
+      sortOrder: z.number().default(0),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.insert(verwaltungen).values(input);
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.delete(verwaltungen).where(eq(verwaltungen.id, input.id));
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).max(100).optional(),
+      displayName: z.string().min(1).max(100).optional(),
+      isListed: z.boolean().optional(),
+      sortOrder: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { id, ...data } = input;
+      return await db.update(verwaltungen).set(data).where(eq(verwaltungen.id, id));
+    }),
 });
 
 export const appRouter = router({
@@ -272,6 +364,9 @@ export const appRouter = router({
         return updated;
       }),
   }),
+    roles: rolesRouter,
+  verwaltungen: verwaltungenRouter,
+
 });
 
 export type AppRouter = typeof appRouter;
