@@ -7,4 +7,5 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: "https://teamliste-final.onrender.com",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  masterPassword: process.env.MASTER_PASSWORD ?? "", // <--- DIESE ZEILE HINZUFÜGEN
 };
