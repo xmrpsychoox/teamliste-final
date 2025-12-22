@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, boolean, timestamp } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, boolean, timestamp, json } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
@@ -10,36 +10,6 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   lastSignedIn: timestamp("lastSignedIn").notNull().defaultNow(),
-});
-
-export const teamMembers = mysqlTable("team_members", {
-  id: int("id").primaryKey().autoincrement(),
-  name: varchar("name", { length: 255 }).notNull(),
-  discordId: varchar("discordId", { length: 255 }).notNull(),
-  rang: varchar("rang", { length: 255 }).notNull(),
-  verwaltung: varchar("verwaltung", { length: 255 }).notNull(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
-});
-
-export const roles = mysqlTable("roles", {
-  id: int("id").primaryKey().autoincrement(),
-  name: varchar("name", { length: 255 }).notNull().unique(),
-  displayName: varchar("displayName", { length: 255 }).notNull(),
-  isListed: boolean("isListed").notNull().default(true),
-  sortOrder: int("sortOrder").notNull().default(0),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
-});
-
-export const verwaltungen = mysqlTable("verwaltungen", {
-  id: int("id").primaryKey().autoincrement(),
-  name: varchar("name", { length: 255 }).notNull().unique(),
-  displayName: varchar("displayName", { length: 255 }).notNull(),
-  isListed: boolean("isListed").notNull().default(true),
-  sortOrder: int("sortOrder").notNull().default(0),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
 // Available ranks for team members
@@ -84,3 +54,43 @@ export const availableVerwaltungen = [
 ] as const;
 
 export type AvailableVerwaltung = typeof availableVerwaltungen[number];
+
+// Activity status for team members
+export type ActivityStatus = "aktiv" | "inaktiv" | "abgemeldet" | "gespraech_noetig";
+
+export const teamMembers = mysqlTable("team_members", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  ranks: json("ranks").$type<AvailableRank[]>().notNull(),
+  verwaltungen: json("verwaltungen").$type<AvailableVerwaltung[] | null>(),
+  discordId: varchar("discordId", { length: 255 }),
+  avatarUrl: varchar("avatarUrl", { length: 512 }),
+  activityStatus: varchar("activityStatus", { length: 50 }).$type<ActivityStatus>().notNull().default("aktiv"),
+  notes: varchar("notes", { length: 1000 }),
+  joinDate: timestamp("joinDate").notNull().defaultNow(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type InsertTeamMember = typeof teamMembers.$inferInsert;
+
+export const roles = mysqlTable("roles", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 255 }).notNull(),
+  isListed: boolean("isListed").notNull().default(true),
+  sortOrder: int("sortOrder").notNull().default(0),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+export const verwaltungen = mysqlTable("verwaltungen", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 255 }).notNull(),
+  isListed: boolean("isListed").notNull().default(true),
+  sortOrder: int("sortOrder").notNull().default(0),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
