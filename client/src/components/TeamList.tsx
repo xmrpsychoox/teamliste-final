@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Filter, Loader2, MessageCircle, UserCheck, UserX, Clock, Pencil, Save, X, Briefcase } from "lucide-react";
+import { Search, Filter, Loader2, MessageCircle, UserCheck, UserX, Clock, Pencil, Save, X, Briefcase, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -192,6 +192,12 @@ export function TeamList() {
     });
   };
 
+  // NEW: Copy Discord ID to clipboard
+  const copyDiscordId = (discordId: string) => {
+    navigator.clipboard.writeText(discordId);
+    toast.success("Discord ID kopiert!");
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -259,33 +265,20 @@ export function TeamList() {
             placeholder="SEARCH OPERATIVE..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-black/40 border-red-900/30 text-white placeholder:text-gray-600 focus:border-red-500 focus:ring-red-500/20 transition-all"
+            className="pl-10 bg-black/40 border-red-900/30 text-white placeholder:text-gray-500 focus:border-red-500"
           />
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-black/40 border-red-900/30 text-gray-300 hover:bg-red-950/30 hover:text-red-400 hover:border-red-500/50">
-              <Filter className="mr-2 h-4 w-4" />
-              FILTER RANKS
-              {selectedRanks.length > 0 && (
-                <span className="ml-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                  {selectedRanks.length}
-                </span>
-              )}
+            <Button variant="outline" className="bg-black/40 border-red-900/30 text-gray-300 hover:bg-red-950/30 hover:text-red-400">
+              <Filter className="h-4 w-4 mr-2" />
+              FILTER BY RANK
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 max-h-[400px] overflow-y-auto backdrop-blur-xl">
-            {/* Option für unbekannte Ränge */}
-            <DropdownMenuCheckboxItem
-              key="UNBEKANNTER RANG"
-              checked={selectedRanks.includes("UNBEKANNTER RANG")}
-              onCheckedChange={() => toggleRank("UNBEKANNTER RANG")}
-              className="focus:bg-red-900/30 focus:text-white hover:bg-red-900/30 cursor-pointer font-bold"
-            >
-              UNBEKANNTER RANG
-            </DropdownMenuCheckboxItem>
+          <DropdownMenuContent className="bg-black/90 border-red-900/50 text-gray-300 backdrop-blur-xl">
+            <DropdownMenuLabel>Ränge</DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-red-900/50" />
-            {roles.map((role) => (
+            {roles.map(role => (
               <DropdownMenuCheckboxItem
                 key={role.id}
                 checked={selectedRanks.includes(role.name)}
@@ -401,6 +394,21 @@ export function TeamList() {
                           </div>
                           
                           <div className="mt-2 space-y-1">
+                            {/* NEW: DISCORD ID ANZEIGEN */}
+                            {member.discordId && (
+                              <div className="flex items-center justify-between bg-blue-900/20 p-2 rounded border border-blue-900/30">
+                                <span className="text-xs text-blue-300 font-mono truncate">{member.discordId}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 text-blue-400 hover:text-blue-300 ml-2 flex-shrink-0"
+                                  onClick={() => copyDiscordId(member.discordId!)}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                            
                             {/* RÄNGE ANZEIGEN */}
                             <div className="flex flex-wrap gap-1">
                               {(member.ranks || []).map((rank, index) => {

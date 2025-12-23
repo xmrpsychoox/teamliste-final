@@ -4,7 +4,6 @@ import { users } from "../drizzle/schema";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 
-
 const SALT_ROUNDS = 10;
 
 /**
@@ -24,28 +23,38 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 /**
  * Create a new user with username/password
  */
-export async function createUser(username: string, password: string, name: string, role: "user" | "admin" = "user") {
+export async function createUser(
+  username: string,
+  password: string,
+  name: string,
+  role: "user" | "admin" = "user"
+): Promise<any> {
   const db = await getDb();
-  if (!db) {
-    throw new Error("Database not available");
-  }
 
-  // Check if username already exists
-  const existing = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  // Check if user already exists
+  const existing = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+
   if (existing.length > 0) {
     throw new Error("Username already exists");
   }
 
   const passwordHash = await hashPassword(password);
 
-  const result = await db.insert(users).values({
-    username,
-    passwordHash,
-    name,
-    role,
-    loginMethod: "custom",
-    lastSignedIn: new Date(),
-  });
+  const result = await db.insert(users).values([
+    {
+      username,
+      passwordHash,
+      name,
+      role,
+      loginMethod: "custom",
+      lastSignIn: new Date(),
+      sessionVersion: 1, // NEW: Session-Versionierung für Invalidierung
+    },
+  ]);
 
   return result;
 }
@@ -53,13 +62,20 @@ export async function createUser(username: string, password: string, name: strin
 /**
  * Authenticate a user with username/password
  */
-export async function authenticateUser(username: string, password: string) {
+export async function authenticateUser(
+  username: string,
+  password: string
+): Promise<any> {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
   }
 
-  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
 
   if (result.length === 0) {
     return null;
@@ -67,16 +83,11 @@ export async function authenticateUser(username: string, password: string) {
 
   const user = result[0];
 
-
-
   const isValid = await verifyPassword(password, user.passwordHash);
 
   if (!isValid) {
     return null;
   }
-
-  // Update last signed in
-  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
 
   return user;
 }
@@ -87,10 +98,15 @@ export async function authenticateUser(username: string, password: string) {
 export async function getUserByUsername(username: string) {
   const db = await getDb();
   if (!db) {
-    return null;
+    throw new Error("Database not available");
   }
 
-  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+
   return result.length > 0 ? result[0] : null;
 }
 
@@ -100,34 +116,97 @@ export async function getUserByUsername(username: string) {
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) {
-    return null;
+    throw new Error("Database not available");
   }
 
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+
   return result.length > 0 ? result[0] : null;
 }
 
 /**
- * Update user password with master password validation
+ * NEW: Invalidate all sessions for a user by incrementing sessionVersion
+ * This will force all existing JWT tokens to become invalid
  */
-export async function updatePasswordWithMaster(
-  username: string, 
-  newPassword: string, 
-  masterPassword: string
-): Promise<boolean> {
-  // Verify master password
-  if (masterPassword !== ENV.masterPassword) {
-    throw new Error("Invalid master password");
-  }
-
+export async function invalidateUserSessions(username: string): Promise<boolean> {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
   }
 
-  // Check if user exists
-  const user = await getUserByUsername(username);
-  if (!user) {
+  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+
+  if (result.length === 0) {
+    throw new Error("User not found");
+  }
+
+  const user = result[0];
+  const newSessionVersion = (user.sessionVersion || 1) + 1;
+
+  // Increment sessionVersion to invalidate all existing tokens
+  await db
+    .update(users)
+    .set({ sessionVersion: newSessionVersion })
+    .where(eq(users.username, username));
+
+  return true;
+}
+
+/**
+ * NEW: Invalidate all sessions for all users
+ * This will force all existing JWT tokens to become invalid
+ */
+export async function invalidateAllUserSessions(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Get all users
+  const allUsers = await db.select().from(users);
+
+  // Increment sessionVersion for all users
+  for (const user of allUsers) {
+    const newSessionVersion = (user.sessionVersion || 1) + 1;
+    await db
+      .update(users)
+      .set({ sessionVersion: newSessionVersion })
+      .where(eq(users.id, user.id));
+  }
+
+  return true;
+}
+
+/**
+ * Update user password with master password validation
+ * MODIFIED: Now invalidates all sessions when password is changed
+ */
+export async function updatePasswordWithMaster(
+  username: string,
+  newPassword: string,
+  masterPassword: string
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  // Verify master password
+  if (masterPassword !== ENV.masterPassword) {
+    throw new Error("Invalid master password. Expected: '${ENV.masterPassword}', Got: '${masterPassword}', ENV var: ${process.env.MASTER_PASSWORD}");
+  }
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+
+  if (result.length === 0) {
     throw new Error("User not found");
   }
 
@@ -135,11 +214,21 @@ export async function updatePasswordWithMaster(
   const passwordHash = await hashPassword(newPassword);
 
   // Update password
-  await db.update(users).set({ passwordHash }).where(eq(users.username, username));
+  await db
+    .update(users)
+    .set({ passwordHash })
+    .where(eq(users.username, username));
+
+  // NEW: Invalidate all sessions for this user
+  await invalidateUserSessions(username);
 
   return true;
 }
 
+/**
+ * Reset user password with master password validation
+ * MODIFIED: Now invalidates all sessions when password is reset
+ */
 export async function resetUserPassword(
   username: string,
   newPassword: string,
@@ -150,15 +239,21 @@ export async function resetUserPassword(
     throw new Error("Database not available");
   }
 
-console.error("[DEBUG] Master password from ENV:", ENV.masterPassword);
-console.error("[DEBUG] Master password from input:", masterPassword);
-console.error("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
+  console.error("[DEBUG] Master password from ENV:", ENV.masterPassword);
+  console.error("[DEBUG] Master password from input:", masterPassword);
+  console.error("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
 
-if (masterPassword !== ENV.masterPassword) {
-  throw new Error(`Invalid master password. Expected: '${ENV.masterPassword}', Got: '${masterPassword}', ENV var: '${process.env.MASTER_PASSWORD}'`);
-}
+  if (masterPassword !== ENV.masterPassword) {
+    throw new Error(
+      `Invalid master password. Expected: '${ENV.masterPassword}', Got: '${masterPassword}', ENV var: ${process.env.MASTER_PASSWORD}`
+    );
+  }
 
-  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
 
   if (result.length === 0) {
     throw new Error("User not found");
@@ -167,7 +262,17 @@ if (masterPassword !== ENV.masterPassword) {
   const user = result[0];
   const newPasswordHash = await hashPassword(newPassword);
 
-  await db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, user.id));
+  // Update password
+  await db
+    .update(users)
+    .set({ passwordHash: newPasswordHash })
+    .where(eq(users.username, username));
 
-  return { success: true, message: "Password updated successfully" };
+  // NEW: Invalidate all sessions for this user
+  await invalidateUserSessions(username);
+
+  return {
+    success: true,
+    message: "Password updated successfully",
+  };
 }

@@ -1,5 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
-import { authenticateUser, updatePasswordWithMaster } from "./customAuth";
+import { authenticateUser, updatePasswordWithMaster, invalidateUserSessions, invalidateAllUserSessions } from "./customAuth";
 import { SignJWT } from "jose";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -16,6 +16,7 @@ import {
 import { getDb } from "./db";
 import { roles, verwaltungen } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { ENV } from "./_core/env";
 
 // Simplified validation - ranks and verwaltungen are now dynamic
 const rankSchema = z.string().min(1).max(100);
@@ -196,6 +197,67 @@ export const appRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: error instanceof Error ? error.message : "Password reset failed",
+          });
+        }
+      }),
+
+    // NEW: Invalidate sessions for a specific user
+    invalidateUserSessions: adminProcedure
+      .input(
+        z.object({
+          username: z.string().min(3),
+          masterPassword: z.string(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // Verify master password
+        if (input.masterPassword !== ENV.masterPassword) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid master password",
+          });
+        }
+
+        try {
+          await invalidateUserSessions(input.username);
+          return {
+            success: true,
+            message: `Sessions invalidated for user: ${input.username}`,
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "Failed to invalidate sessions",
+          });
+        }
+      }),
+
+    // NEW: Invalidate all user sessions
+    invalidateAllSessions: adminProcedure
+      .input(
+        z.object({
+          masterPassword: z.string(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // Verify master password
+        if (input.masterPassword !== ENV.masterPassword) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid master password",
+          });
+        }
+
+        try {
+          await invalidateAllUserSessions();
+          return {
+            success: true,
+            message: "All user sessions have been invalidated. All users must re-login.",
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "Failed to invalidate all sessions",
           });
         }
       }),

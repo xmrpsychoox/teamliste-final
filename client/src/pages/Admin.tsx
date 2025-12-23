@@ -29,7 +29,7 @@ import {
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Plus, Pencil, Trash2, Users, Shield, Loader2, Settings, Search, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Users, Shield, Loader2, Settings, Search, ChevronUp, ChevronDown, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { getLoginUrl } from "@/const";
 
@@ -41,6 +41,8 @@ export default function Admin() {
   const [redirecting, setRedirecting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [masterPassword, setMasterPassword] = useState("");
+  const [isLogoutAllOpen, setIsLogoutAllOpen] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -182,6 +184,22 @@ export default function Admin() {
     },
   });
 
+  // NEW: Mutation for invalidating all sessions
+  const invalidateAllSessions = trpc.auth.invalidateAllSessions.useMutation({
+    onSuccess: () => {
+      toast.success("Alle Benutzer wurden ausgeloggt");
+      setIsLogoutAllOpen(false);
+      setMasterPassword("");
+      // Logout current user after invalidating all sessions
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1000);
+    },
+    onError: (error) => {
+      toast.error(`Fehler: ${error.message}`);
+    },
+  });
+
   const resetForm = () => {
     setFormName("");
     setFormRanks([]);
@@ -274,6 +292,16 @@ export default function Admin() {
     });
   };
 
+  // NEW: Handle logout all users
+  const handleLogoutAllUsers = () => {
+    if (!masterPassword.trim()) {
+      toast.error("Master-Passwort ist erforderlich");
+      return;
+    }
+    invalidateAllSessions.mutate({
+      masterPassword: masterPassword,
+    });
+  };
 
   const moveRole = (id: number, direction: 'up' | 'down') => {
     const index = roles.findIndex(r => r.id === id);
@@ -288,7 +316,6 @@ export default function Admin() {
     updateRole.mutate({ id: id, sortOrder: targetRole.sortOrder });
     updateRole.mutate({ id: targetRole.id, sortOrder: roles[index].sortOrder });
   };
-
 
   // Auth check
   if (authLoading) {
@@ -319,608 +346,525 @@ export default function Admin() {
         <h1 className="text-2xl font-bold">Admin-Zugriff erforderlich</h1>
         <p className="text-gray-400">Sie haben keine Berechtigung, diese Seite zu sehen.</p>
         <Link href="/">
-          <Button variant="outline" className="border-red-900/30 text-gray-300 hover:bg-red-950/30">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Zurück zur Startseite
-          </Button>
+          <Button className="bg-red-600 hover:bg-red-700">Zurück zur Startseite</Button>
         </Link>
       </div>
     );
   }
 
-
-  // Filter members based on search query
-  const filteredMembers = members?.filter(member => {
-    if (!searchQuery.trim()) return true;
-    
-    const query = searchQuery.toLowerCase();
-    const nameMatch = member.name.toLowerCase().includes(query);
-    const idMatch = member.discordId?.includes(searchQuery);
-    const rankMatch = (member.ranks as string[])?.some(rank => {
-      const roleObj = roles.find(r => r.name === rank);
-      return roleObj?.displayName.toLowerCase().includes(query) || rank.toLowerCase().includes(query);
-    });
-    const verwaltungMatch = (member.verwaltungen as string[])?.some(verwaltung => {
-      const verwaltungObj = verwaltungen.find(v => v.name === verwaltung);
-      return verwaltungObj?.displayName.toLowerCase().includes(query) || verwaltung.toLowerCase().includes(query);
-    });
-    
-    return nameMatch || idMatch || rankMatch || verwaltungMatch;
-  }) || [];
-
-  // Get only listed roles and verwaltungen
-  const listedRoles = roles.filter(r => r.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
-  const listedVerwaltungen = verwaltungen.filter(v => v.isListed).sort((a, b) => a.sortOrder - b.sortOrder);
-
-  // Sort members by rank hierarchy
-  const sortedMembers = [...filteredMembers].sort((a, b) => {
-    // Get the highest rank (lowest sortOrder) for each member
-    const getHighestRankOrder = (member: typeof a) => {
-      if (!member.ranks || member.ranks.length === 0) return Infinity;
-      
-      const rankOrders = (member.ranks as string[]).map(rankName => {
-        const role = roles.find(r => r.name === rankName);
-        return role?.sortOrder ?? Infinity;
-      });
-      
-      return Math.min(...rankOrders);
-    };
-    
-    const aOrder = getHighestRankOrder(a);
-    const bOrder = getHighestRankOrder(b);
-    
-    // Sort by rank order (lower sortOrder = higher priority)
-    if (aOrder !== bOrder) {
-      return aOrder - bOrder;
-    }
-    
-    // If same rank, sort alphabetically by name
-    return a.name.localeCompare(b.name, 'de');
-  });
+  const filteredMembers = members?.filter(member =>
+    member.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
 
   const RankSelector = () => (
     <div className="space-y-2">
       <Label>Ränge *</Label>
-      <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto p-2 bg-black/20 rounded-lg border border-red-900/20">
-        {listedRoles.map((role) => (
-          <div key={role.id} className="flex items-center space-x-2">
+      <div className="grid grid-cols-2 gap-3 max-h-[150px] overflow-y-auto bg-black/20 p-3 rounded-lg border border-red-900/30">
+        {roles.map(role => (
+          <label key={role.id} className="flex items-center gap-2 cursor-pointer">
             <Checkbox
-              id={`rank-${role.id}`}
               checked={formRanks.includes(role.name)}
               onCheckedChange={() => toggleRank(role.name)}
-              className="border-red-900/50 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+              className="border-red-900/50 data-[state=checked]:bg-red-600"
             />
-            <label
-              htmlFor={`rank-${role.id}`}
-              className="text-sm text-gray-300 cursor-pointer hover:text-white"
-            >
-              {role.displayName}
-            </label>
-          </div>
+            <span className="text-sm">{role.displayName}</span>
+          </label>
         ))}
       </div>
-      {formRanks.length > 0 && (
-        <p className="text-xs text-gray-500">
-          Ausgewählt: {formRanks.map(r => listedRoles.find(lr => lr.name === r)?.displayName || r).join(", ")}
-        </p>
-      )}
     </div>
   );
 
   const VerwaltungSelector = () => (
     <div className="space-y-2">
-      <Label>Verwaltungen (optional)</Label>
-      <div className="grid grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-2 bg-black/20 rounded-lg border border-orange-900/20">
-        {listedVerwaltungen.map((verwaltung) => (
-          <div key={verwaltung.id} className="flex items-center space-x-2">
+      <Label>Verwaltungen</Label>
+      <div className="grid grid-cols-2 gap-3 max-h-[150px] overflow-y-auto bg-black/20 p-3 rounded-lg border border-orange-900/30">
+        {verwaltungen.map(verwaltung => (
+          <label key={verwaltung.id} className="flex items-center gap-2 cursor-pointer">
             <Checkbox
-              id={`verwaltung-${verwaltung.id}`}
               checked={formVerwaltungen.includes(verwaltung.name)}
               onCheckedChange={() => toggleVerwaltung(verwaltung.name)}
-              className="border-orange-900/50 data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
+              className="border-orange-900/50 data-[state=checked]:bg-orange-600"
             />
-            <label
-              htmlFor={`verwaltung-${verwaltung.id}`}
-              className="text-sm text-gray-300 cursor-pointer hover:text-white"
-            >
-              {verwaltung.displayName}
-            </label>
-          </div>
+            <span className="text-sm">{verwaltung.displayName}</span>
+          </label>
         ))}
       </div>
-      {formVerwaltungen.length > 0 && (
-        <p className="text-xs text-orange-400">
-          Ausgewählt: {formVerwaltungen.map(v => listedVerwaltungen.find(lv => lv.name === v)?.displayName || v).join(", ")}
-        </p>
-      )}
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Background */}
-      <div className="fixed inset-0 z-[-1]">
-        <img 
-          src="/images/syndikat-bg.jpg" 
-          alt="Background" 
-          className="w-full h-full object-cover opacity-20"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/80 to-black/95" />
-      </div>
-
-      {/* Header */}
-      <header className="border-b border-red-900/20 bg-black/40 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Zurück
+    <div className="min-h-screen bg-black text-white p-4 md:p-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="max-w-7xl mx-auto"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <Link href="/">
+            <Button variant="ghost" className="text-gray-400 hover:text-white">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Zurück
+            </Button>
+          </Link>
+          <h1 className="text-3xl font-bold">Admin Panel</h1>
+          {/* NEW: Logout All Users Button */}
+          <AlertDialog open={isLogoutAllOpen} onOpenChange={setIsLogoutAllOpen}>
+            <AlertDialogTrigger asChild>
+              <Button className="bg-red-700 hover:bg-red-800">
+                <LogOut className="mr-2 h-4 w-4" />
+                Alle ausloggen
               </Button>
-            </Link>
-            <div className="flex items-center gap-3">
-              <Shield className="h-8 w-8 text-red-500" />
-              <div>
-                <h1 className="text-xl font-bold">Admin Panel</h1>
-                <p className="text-sm text-gray-400">Teammitglieder verwalten</p>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-gray-900 border-red-900/30 text-white">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Alle Benutzer ausloggen?</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-400">
+                  Dies wird alle aktiven Benutzer-Sessions invalidieren. Alle Benutzer müssen sich neu anmelden.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="masterPassword">Master-Passwort</Label>
+                  <Input
+                    id="masterPassword"
+                    type="password"
+                    value={masterPassword}
+                    onChange={(e) => setMasterPassword(e.target.value)}
+                    placeholder="Geben Sie das Master-Passwort ein"
+                    className="bg-black/20 border-red-900/30"
+                  />
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-400">
-              Angemeldet als <span className="text-white font-medium">{user?.username}</span>
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Suche nach Name, Rang, Verwaltung oder Discord ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-black/20 border-red-900/30 text-white placeholder:text-gray-500"
-            />
-          </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-gray-700">Abbrechen</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleLogoutAllUsers}
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={invalidateAllSessions.isPending || !masterPassword.trim()}
+                >
+                  {invalidateAllSessions.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Alle ausloggen
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <Users className="h-6 w-6 text-red-500" />
-            <h2 className="text-2xl font-bold">Teammitglieder</h2>
-            {!isLoading && members && (
-              <span className="text-sm text-gray-400">({members.length})</span>
-            )}
-          </div>
-          <div className="flex gap-3">
-            {/* Settings Dialog */}
-            <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-gray-700 hover:bg-gray-600">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Ränge & Verwaltungen verwalten
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-4xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Ränge & Verwaltungen verwalten</DialogTitle>
-                  <DialogDescription className="text-gray-400">
-                    Erstellen, bearbeiten und löschen Sie Ränge und Verwaltungen
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="space-y-8 py-4">
-                  {/* Roles Section */}
-                  <div>
-                    <h3 className="text-xl font-semibold mb-4 text-red-400">Rollen verwalten</h3>
-                    
-                    {/* Create Role Form */}
-                    <div className="bg-black/40 p-4 rounded-lg mb-4 border border-red-900/20">
-                      <h4 className="text-sm font-medium mb-3 text-gray-300">Neue Rolle erstellen</h4>
-                      <div className="flex gap-3">
-                        <Input
-                          type="text"
-                          placeholder="Name (z.B. admin)"
-                          value={newRoleName}
-                          onChange={(e) => setNewRoleName(e.target.value)}
-                          className="flex-1 bg-black/20 border-red-900/30"
-                        />
-                        <Input
-                          type="text"
-                          placeholder="Anzeigename (z.B. Administrator)"
-                          value={newRoleDisplayName}
-                          onChange={(e) => setNewRoleDisplayName(e.target.value)}
-                          className="flex-1 bg-black/20 border-red-900/30"
-                        />
+        {/* Main Content */}
+        <div className="space-y-8">
+          {/* Team Members Section */}
+          <Card className="bg-gray-900/50 border-red-900/30">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Users className="h-6 w-6 text-red-500" />
+                  <h2 className="text-2xl font-bold">Teammitglieder</h2>
+                  {!isLoading && members && (
+                    <span className="text-sm text-gray-400">({members.length})</span>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  {/* Settings Dialog */}
+                  <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-gray-700 hover:bg-gray-600">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Ränge & Verwaltungen verwalten
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Ränge & Verwaltungen verwalten</DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                          Erstellen, bearbeiten und löschen Sie Ränge und Verwaltungen
+                        </DialogDescription>
+                      </DialogHeader>
+                      
+                      <div className="space-y-8 py-4">
+                        {/* Roles Section */}
+                        <div>
+                          <h3 className="text-xl font-semibold mb-4 text-red-400">Rollen verwalten</h3>
+                          
+                          {/* Create Role Form */}
+                          <div className="bg-black/40 p-4 rounded-lg mb-4 border border-red-900/20">
+                            <h4 className="text-sm font-medium mb-3 text-gray-300">Neue Rolle erstellen</h4>
+                            <div className="flex gap-3">
+                              <Input
+                                type="text"
+                                placeholder="Name (z.B. admin)"
+                                value={newRoleName}
+                                onChange={(e) => setNewRoleName(e.target.value)}
+                                className="flex-1 bg-black/20 border-red-900/30"
+                              />
+                              <Input
+                                type="text"
+                                placeholder="Anzeigename (z.B. Administrator)"
+                                value={newRoleDisplayName}
+                                onChange={(e) => setNewRoleDisplayName(e.target.value)}
+                                className="flex-1 bg-black/20 border-red-900/30"
+                              />
+                              <Button
+                                onClick={handleCreateRole}
+                                className="bg-red-600 hover:bg-red-700"
+                                disabled={createRole.isPending}
+                              >
+                                {createRole.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Erstellen
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Roles List */}
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                            {roles.map((role, index) => (
+                              <div key={role.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-red-900/20">
+                                <div className="flex flex-col gap-1">
+                                  <Button
+                                    onClick={() => moveRole(role.id, 'up')}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 hover:bg-red-950/30"
+                                    disabled={index === 0}
+                                  >
+                                    <ChevronUp className="h-4 w-4 text-gray-400" />
+                                  </Button>
+                                  <Button
+                                    onClick={() => moveRole(role.id, 'down')}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 hover:bg-red-950/30"
+                                    disabled={index === roles.length - 1}
+                                  >
+                                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                                  </Button>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium text-white">{role.displayName}</div>
+                                  <div className="text-sm text-gray-400">{role.name}</div>
+                                </div>
+                                <label className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={role.isListed}
+                                    onCheckedChange={(checked) =>
+                                      updateRole.mutate({ id: role.id, isListed: checked as boolean })
+                                    }
+                                    className="border-red-900/50 data-[state=checked]:bg-red-600"
+                                  />
+                                  <span className="text-sm text-gray-300">Gelistet</span>
+                                </label>
+                                <Button
+                                  onClick={() => deleteRole.mutate({ id: role.id })}
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-red-900/50 hover:bg-red-950/30 text-red-400"
+                                  disabled={deleteRole.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Verwaltungen Section */}
+                        <div>
+                          <h3 className="text-xl font-semibold mb-4 text-orange-400">Verwaltungen verwalten</h3>
+                          
+                          {/* Create Verwaltung Form */}
+                          <div className="bg-black/40 p-4 rounded-lg mb-4 border border-orange-900/20">
+                            <h4 className="text-sm font-medium mb-3 text-gray-300">Neue Verwaltung erstellen</h4>
+                            <div className="flex gap-3">
+                              <Input
+                                type="text"
+                                placeholder="Name (z.B. eventmanagement)"
+                                value={newVerwaltungName}
+                                onChange={(e) => setNewVerwaltungName(e.target.value)}
+                                className="flex-1 bg-black/20 border-orange-900/30"
+                              />
+                              <Input
+                                type="text"
+                                placeholder="Anzeigename (z.B. Eventmanagement)"
+                                value={newVerwaltungDisplayName}
+                                onChange={(e) => setNewVerwaltungDisplayName(e.target.value)}
+                                className="flex-1 bg-black/20 border-orange-900/30"
+                              />
+                              <Button
+                                onClick={handleCreateVerwaltung}
+                                className="bg-orange-600 hover:bg-orange-700"
+                                disabled={createVerwaltung.isPending}
+                              >
+                                {createVerwaltung.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Erstellen
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Verwaltungen List */}
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                            {verwaltungen.map((verwaltung) => (
+                              <div key={verwaltung.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-orange-900/20">
+                                <div className="flex-1">
+                                  <div className="font-medium text-white">{verwaltung.displayName}</div>
+                                  <div className="text-sm text-gray-400">{verwaltung.name}</div>
+                                </div>
+                                <label className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={verwaltung.isListed}
+                                    onCheckedChange={(checked) =>
+                                      updateVerwaltung.mutate({ id: verwaltung.id, isListed: checked as boolean })
+                                    }
+                                    className="border-orange-900/50 data-[state=checked]:bg-orange-600"
+                                  />
+                                  <span className="text-sm text-gray-300">Gelistet</span>
+                                </label>
+                                <Button
+                                  onClick={() => deleteVerwaltung.mutate({ id: verwaltung.id })}
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-orange-900/50 hover:bg-orange-950/30 text-orange-400"
+                                  disabled={deleteVerwaltung.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="border-gray-700">
+                          Schließen
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Create Member Dialog */}
+                  <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-red-600 hover:bg-red-700">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Neues Mitglied
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Neues Teammitglied erstellen</DialogTitle>
+                        <DialogDescription className="text-gray-400">
+                          Fügen Sie ein neues Mitglied zum Team hinzu
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Name *</Label>
+                          <Input
+                            id="name"
+                            value={formName}
+                            onChange={(e) => setFormName(e.target.value)}
+                            placeholder="Max Mustermann"
+                            className="bg-black/20 border-red-900/30"
+                          />
+                        </div>
+                        <RankSelector />
+                        <VerwaltungSelector />
+                        <div className="space-y-2">
+                          <Label htmlFor="discordId">Discord ID</Label>
+                          <Input
+                            id="discordId"
+                            value={formDiscordId}
+                            onChange={(e) => setFormDiscordId(e.target.value)}
+                            placeholder="123456789012345678"
+                            className="bg-black/20 border-red-900/30"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="notes">Notizen</Label>
+                          <Textarea
+                            id="notes"
+                            value={formNotes}
+                            onChange={(e) => setFormNotes(e.target.value)}
+                            placeholder="Zusätzliche Informationen..."
+                            className="bg-black/20 border-red-900/30 min-h-[100px]"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCreateOpen(false)} className="border-gray-700">
+                          Abbrechen
+                        </Button>
                         <Button
-                          onClick={handleCreateRole}
+                          onClick={handleCreate}
                           className="bg-red-600 hover:bg-red-700"
-                          disabled={createRole.isPending}
+                          disabled={createMutation.isPending}
                         >
-                          {createRole.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                           Erstellen
                         </Button>
-                      </div>
-                    </div>
-
-                    {/* Roles List */}
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {roles.map((role, index) => (
-                        <div key={role.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-red-900/20">
-                          <div className="flex flex-col gap-1">
-                            <Button
-                              onClick={() => moveRole(role.id, 'up')}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 hover:bg-red-950/30"
-                              disabled={index === 0}
-                            >
-                              <ChevronUp className="h-4 w-4 text-gray-400" />
-                            </Button>
-                            <Button
-                              onClick={() => moveRole(role.id, 'down')}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 hover:bg-red-950/30"
-                              disabled={index === roles.length - 1}
-                            >
-                              <ChevronDown className="h-4 w-4 text-gray-400" />
-                            </Button>
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-white">{role.displayName}</div>
-                            <div className="text-sm text-gray-400">{role.name}</div>
-                          </div>
-                          <label className="flex items-center gap-2">
-                            <Checkbox
-                              checked={role.isListed}
-                              onCheckedChange={(checked) =>
-                                updateRole.mutate({ id: role.id, isListed: checked as boolean })
-                              }
-                              className="border-red-900/50 data-[state=checked]:bg-red-600"
-                            />
-                            <span className="text-sm text-gray-300">Gelistet</span>
-                          </label>
-                          <Button
-                            onClick={() => deleteRole.mutate({ id: role.id })}
-                            variant="outline"
-                            size="sm"
-                            className="border-red-900/50 hover:bg-red-950/30 text-red-400"
-                            disabled={deleteRole.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Verwaltungen Section */}
-                  <div>
-                    <h3 className="text-xl font-semibold mb-4 text-orange-400">Verwaltungen verwalten</h3>
-                    
-                    {/* Create Verwaltung Form */}
-                    <div className="bg-black/40 p-4 rounded-lg mb-4 border border-orange-900/20">
-                      <h4 className="text-sm font-medium mb-3 text-gray-300">Neue Verwaltung erstellen</h4>
-                      <div className="flex gap-3">
-                        <Input
-                          type="text"
-                          placeholder="Name (z.B. eventmanagement)"
-                          value={newVerwaltungName}
-                          onChange={(e) => setNewVerwaltungName(e.target.value)}
-                          className="flex-1 bg-black/20 border-orange-900/30"
-                        />
-                        <Input
-                          type="text"
-                          placeholder="Anzeigename (z.B. Eventmanagement)"
-                          value={newVerwaltungDisplayName}
-                          onChange={(e) => setNewVerwaltungDisplayName(e.target.value)}
-                          className="flex-1 bg-black/20 border-orange-900/30"
-                        />
-                        <Button
-                          onClick={handleCreateVerwaltung}
-                          className="bg-orange-600 hover:bg-orange-700"
-                          disabled={createVerwaltung.isPending}
-                        >
-                          {createVerwaltung.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Erstellen
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Verwaltungen List */}
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {verwaltungen.map((verwaltung) => (
-                        <div key={verwaltung.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-lg border border-orange-900/20">
-                          <div className="flex-1">
-                            <div className="font-medium text-white">{verwaltung.displayName}</div>
-                            <div className="text-sm text-gray-400">{verwaltung.name}</div>
-                          </div>
-                          <label className="flex items-center gap-2">
-                            <Checkbox
-                              checked={verwaltung.isListed}
-                              onCheckedChange={(checked) =>
-                                updateVerwaltung.mutate({ id: verwaltung.id, isListed: checked as boolean })
-                              }
-                              className="border-orange-900/50 data-[state=checked]:bg-orange-600"
-                            />
-                            <span className="text-sm text-gray-300">Gelistet</span>
-                          </label>
-                          <Button
-                            onClick={() => deleteVerwaltung.mutate({ id: verwaltung.id })}
-                            variant="outline"
-                            size="sm"
-                            className="border-orange-900/50 hover:bg-orange-950/30 text-orange-400"
-                            disabled={deleteVerwaltung.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
+              </div>
 
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="border-gray-700">
-                    Schließen
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Create Member Dialog */}
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-red-600 hover:bg-red-700">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Neues Mitglied
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Neues Teammitglied erstellen</DialogTitle>
-                  <DialogDescription className="text-gray-400">
-                    Fügen Sie ein neues Mitglied zum Team hinzu
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
-                    <Input
-                      id="name"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
-                      placeholder="Max Mustermann"
-                      className="bg-black/20 border-red-900/30"
-                    />
-                  </div>
-                  <RankSelector />
-                  <VerwaltungSelector />
-                  <div className="space-y-2">
-                    <Label htmlFor="discordId">Discord ID</Label>
-                    <Input
-                      id="discordId"
-                      value={formDiscordId}
-                      onChange={(e) => setFormDiscordId(e.target.value)}
-                      placeholder="123456789012345678"
-                      className="bg-black/20 border-red-900/30"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Notizen</Label>
-                    <Textarea
-                      id="notes"
-                      value={formNotes}
-                      onChange={(e) => setFormNotes(e.target.value)}
-                      placeholder="Zusätzliche Informationen..."
-                      className="bg-black/20 border-red-900/30 min-h-[100px]"
-                    />
-                  </div>
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                  <Input
+                    type="text"
+                    placeholder="Nach Mitglied suchen..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-black/20 border-red-900/30"
+                  />
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsCreateOpen(false)} className="border-gray-700">
-                    Abbrechen
-                  </Button>
-                  <Button 
-                    onClick={handleCreate} 
-                    className="bg-red-600 hover:bg-red-700"
-                    disabled={createMutation.isPending}
-                  >
-                    {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Erstellen
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+              </div>
 
-        {isLoading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-          </div>
-        ) : !members || members.length === 0 ? (
-          <Card className="bg-gray-900/50 border-red-900/20">
-            <CardContent className="py-12 text-center">
-              <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">Noch keine Teammitglieder vorhanden</p>
-              <p className="text-sm text-gray-500 mt-2">Klicken Sie auf "Neues Mitglied", um zu beginnen</p>
+              {/* Members List */}
+              {isLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+                </div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  Keine Mitglieder gefunden
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredMembers.map((member) => (
+                    <motion.div
+                      key={member.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center justify-between p-4 bg-black/20 rounded-lg border border-red-900/20 hover:border-red-900/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-semibold text-white">{member.name}</h3>
+                          {member.discordId && (
+                            <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-1 rounded font-mono">
+                              {member.discordId}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          {(member.ranks || []).map((rank) => (
+                            <span key={rank} className="text-xs bg-red-900/30 text-red-300 px-2 py-1 rounded">
+                              {rank}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              onClick={() => openEditDialog(member)}
+                              variant="outline"
+                              size="sm"
+                              className="border-red-900/50 hover:bg-red-950/30 text-red-400"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Teammitglied bearbeiten</DialogTitle>
+                              <DialogDescription className="text-gray-400">
+                                Bearbeiten Sie die Informationen des Mitglieds
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-name">Name *</Label>
+                                <Input
+                                  id="edit-name"
+                                  value={formName}
+                                  onChange={(e) => setFormName(e.target.value)}
+                                  placeholder="Max Mustermann"
+                                  className="bg-black/20 border-red-900/30"
+                                />
+                              </div>
+                              <RankSelector />
+                              <VerwaltungSelector />
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-discordId">Discord ID</Label>
+                                <Input
+                                  id="edit-discordId"
+                                  value={formDiscordId}
+                                  onChange={(e) => setFormDiscordId(e.target.value)}
+                                  placeholder="123456789012345678"
+                                  className="bg-black/20 border-red-900/30"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="edit-notes">Notizen</Label>
+                                <Textarea
+                                  id="edit-notes"
+                                  value={formNotes}
+                                  onChange={(e) => setFormNotes(e.target.value)}
+                                  placeholder="Zusätzliche Informationen..."
+                                  className="bg-black/20 border-red-900/30 min-h-[100px]"
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setEditingMember(null)} className="border-gray-700">
+                                Abbrechen
+                              </Button>
+                              <Button
+                                onClick={handleUpdate}
+                                className="bg-red-600 hover:bg-red-700"
+                                disabled={updateMutation.isPending}
+                              >
+                                {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Speichern
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-red-900/50 hover:bg-red-950/30 text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-gray-900 border-red-900/30 text-white">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Mitglied löschen?</AlertDialogTitle>
+                              <AlertDialogDescription className="text-gray-400">
+                                Diese Aktion kann nicht rückgängig gemacht werden. Das Mitglied "{member.name}" wird permanent gelöscht.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="border-gray-700">Abbrechen</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteMutation.mutate({ id: member.id })}
+                                className="bg-red-600 hover:bg-red-700"
+                                disabled={deleteMutation.isPending}
+                              >
+                                {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Löschen
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedMembers.map((member, index) => (
-              <motion.div
-                key={member.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card className="bg-gray-900/50 border-red-900/20 hover:border-red-900/40 transition-colors">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">{member.name}</h3>
-                        {member.discordId && (
-                          <p className="text-sm text-gray-500">ID: {member.discordId}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {member.ranks && member.ranks.length > 0 && (
-                      <div className="mb-3">
-                        <p className="text-xs text-gray-500 mb-2">Ränge:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {(member.ranks as string[]).map((rank) => {
-                            const roleObj = roles.find(r => r.name === rank);
-                            return (
-                              <span
-                                key={rank}
-                                className="px-2 py-1 bg-red-950/30 text-red-400 text-xs rounded border border-red-900/30"
-                              >
-                                {roleObj?.displayName || rank}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {member.verwaltungen && member.verwaltungen.length > 0 && (
-                      <div className="mb-3">
-                        <p className="text-xs text-gray-500 mb-2">Verwaltungen:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {(member.verwaltungen as string[]).map((verwaltung) => {
-                            const verwaltungObj = verwaltungen.find(v => v.name === verwaltung);
-                            return (
-                              <span
-                                key={verwaltung}
-                                className="px-2 py-1 bg-orange-950/30 text-orange-400 text-xs rounded border border-orange-900/30"
-                              >
-                                {verwaltungObj?.displayName || verwaltung}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {member.notes && (
-                      <div className="mb-4">
-                        <p className="text-xs text-gray-500 mb-1">Notizen:</p>
-                        <p className="text-sm text-gray-400">{member.notes}</p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 mt-4">
-                      <Dialog open={editingMember === member.id} onOpenChange={(open) => !open && setEditingMember(null)}>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1 border-gray-700 hover:border-red-500 hover:bg-red-950/30"
-                            onClick={() => openEditDialog(member)}
-                          >
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Bearbeiten
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-gray-900 border-red-900/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Teammitglied bearbeiten</DialogTitle>
-                            <DialogDescription className="text-gray-400">
-                              Ändern Sie die Informationen des Teammitglieds
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="edit-name">Name *</Label>
-                              <Input
-                                id="edit-name"
-                                value={formName}
-                                onChange={(e) => setFormName(e.target.value)}
-                                placeholder="Max Mustermann"
-                                className="bg-black/20 border-red-900/30"
-                              />
-                            </div>
-                            <RankSelector />
-                            <VerwaltungSelector />
-                            <div className="space-y-2">
-                              <Label htmlFor="edit-discordId">Discord ID</Label>
-                              <Input
-                                id="edit-discordId"
-                                value={formDiscordId}
-                                onChange={(e) => setFormDiscordId(e.target.value)}
-                                placeholder="123456789012345678"
-                                className="bg-black/20 border-red-900/30"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="edit-notes">Notizen</Label>
-                              <Textarea
-                                id="edit-notes"
-                                value={formNotes}
-                                onChange={(e) => setFormNotes(e.target.value)}
-                                placeholder="Zusätzliche Informationen..."
-                                className="bg-black/20 border-red-900/30 min-h-[100px]"
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setEditingMember(null)} className="border-gray-700">
-                              Abbrechen
-                            </Button>
-                            <Button 
-                              onClick={handleUpdate} 
-                              className="bg-red-600 hover:bg-red-700"
-                              disabled={updateMutation.isPending}
-                            >
-                              {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                              Speichern
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="border-gray-700 hover:border-red-500 hover:bg-red-950/30">
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="bg-gray-900 border-red-900/30 text-white">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Teammitglied löschen?</AlertDialogTitle>
-                            <AlertDialogDescription className="text-gray-400">
-                              Sind Sie sicher, dass Sie "{member.name}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel className="border-gray-700">Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction 
-                              onClick={() => deleteMutation.mutate({ id: member.id })}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              Löschen
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </main>
+        </div>
+      </motion.div>
     </div>
   );
 }

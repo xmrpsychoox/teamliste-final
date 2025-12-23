@@ -12,6 +12,10 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   lastSignedIn: timestamp("lastSignedIn").notNull().defaultNow(),
+  sessionVersion: int("sessionVersion").default(1).notNull(),
+  sessionVersion: int("sessionVersion").default(1).notNull(),
+
+
 });
 
 // Available ranks for team members
