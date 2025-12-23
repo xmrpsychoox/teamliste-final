@@ -1,9 +1,10 @@
-import { mysqlTable, int, varchar, boolean, timestamp, json } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, timestamp, text, boolean } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
   username: varchar("username", { length: 255 }).notNull().unique(),
   passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  passwordChangedAt: timestamp("passwordChangedAt"), // NEW: Track when password was last changed
   openId: varchar("openId", { length: 64 }),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
@@ -48,34 +49,24 @@ export const availableVerwaltungen = [
   "Teamverwaltungs Leitung",
   "Teamverwaltung",
   "Regelwerkteam",
-  "Teamüberwachung",
   "Support Leitung",
-  "Mod Leitung",
   "Spendenverwaltung",
-  "Streamingverwaltung"
+  "Teamüberwachung",
+  "Mod Leitung"
 ] as const;
 
 export type AvailableVerwaltung = typeof availableVerwaltungen[number];
 
-// Activity status for team members
-export type ActivityStatus = "aktiv" | "inaktiv" | "abgemeldet" | "gespraech_noetig";
-
 export const teamMembers = mysqlTable("team_members", {
   id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 255 }).notNull(),
-  ranks: json("ranks").$type<AvailableRank[]>().notNull(),
-  verwaltungen: json("verwaltungen").$type<AvailableVerwaltung[] | null>(),
+  ranks: text("ranks").notNull(),
+  verwaltungen: text("verwaltungen"),
   discordId: varchar("discordId", { length: 255 }),
-  avatarUrl: varchar("avatarUrl", { length: 512 }),
-  activityStatus: varchar("activityStatus", { length: 50 }).$type<ActivityStatus>().notNull().default("aktiv"),
-  notes: varchar("notes", { length: 1000 }),
-  joinDate: timestamp("joinDate").notNull().defaultNow(),
+  notes: text("notes"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
-
-export type TeamMember = typeof teamMembers.$inferSelect;
-export type InsertTeamMember = typeof teamMembers.$inferInsert;
 
 export const roles = mysqlTable("roles", {
   id: int("id").primaryKey().autoincrement(),
@@ -95,4 +86,12 @@ export const verwaltungen = mysqlTable("verwaltungen", {
   sortOrder: int("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+export const teams = mysqlTable("teams", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  ownerId: int("ownerId").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
