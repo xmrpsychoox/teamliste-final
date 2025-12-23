@@ -45,7 +45,6 @@ export async function createUser(username: string, password: string, name: strin
     role,
     loginMethod: "custom",
     lastSignedIn: new Date(),
-    passwordChangedAt: new Date(), // Set initial password change timestamp
   });
 
   return result;
@@ -67,6 +66,8 @@ export async function authenticateUser(username: string, password: string) {
   }
 
   const user = result[0];
+
+
 
   const isValid = await verifyPassword(password, user.passwordHash);
 
@@ -108,7 +109,6 @@ export async function getUserById(id: number) {
 
 /**
  * Update user password with master password validation
- * This will invalidate all existing sessions by updating passwordChangedAt
  */
 export async function updatePasswordWithMaster(
   username: string, 
@@ -134,21 +134,12 @@ export async function updatePasswordWithMaster(
   // Hash new password
   const passwordHash = await hashPassword(newPassword);
 
-  // Update password AND passwordChangedAt to invalidate all existing sessions
-  await db.update(users).set({ 
-    passwordHash,
-    passwordChangedAt: new Date() // This will invalidate all existing JWT tokens
-  }).where(eq(users.username, username));
-
-  console.log(`[Auth] Password changed for user '${username}'. All existing sessions invalidated.`);
+  // Update password
+  await db.update(users).set({ passwordHash }).where(eq(users.username, username));
 
   return true;
 }
 
-/**
- * Reset user password with master password validation
- * This will invalidate all existing sessions by updating passwordChangedAt
- */
 export async function resetUserPassword(
   username: string,
   newPassword: string,
@@ -159,13 +150,13 @@ export async function resetUserPassword(
     throw new Error("Database not available");
   }
 
-  console.error("[DEBUG] Master password from ENV:", ENV.masterPassword);
-  console.error("[DEBUG] Master password from input:", masterPassword);
-  console.error("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
+console.error("[DEBUG] Master password from ENV:", ENV.masterPassword);
+console.error("[DEBUG] Master password from input:", masterPassword);
+console.error("[DEBUG] process.env.MASTER_PASSWORD:", process.env.MASTER_PASSWORD);
 
-  if (masterPassword !== ENV.masterPassword) {
-    throw new Error(`Invalid master password. Expected: '${ENV.masterPassword}', Got: '${masterPassword}', ENV var: '${process.env.MASTER_PASSWORD}'`);
-  }
+if (masterPassword !== ENV.masterPassword) {
+  throw new Error(`Invalid master password. Expected: '${ENV.masterPassword}', Got: '${masterPassword}', ENV var: '${process.env.MASTER_PASSWORD}'`);
+}
 
   const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
 
@@ -176,13 +167,7 @@ export async function resetUserPassword(
   const user = result[0];
   const newPasswordHash = await hashPassword(newPassword);
 
-  // Update password AND passwordChangedAt to invalidate all existing sessions
-  await db.update(users).set({ 
-    passwordHash: newPasswordHash,
-    passwordChangedAt: new Date() // This will invalidate all existing JWT tokens
-  }).where(eq(users.id, user.id));
+  await db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, user.id));
 
-  console.log(`[Auth] Password reset for user '${username}'. All existing sessions invalidated.`);
-
-  return { success: true, message: "Password updated successfully. All users have been logged out." };
+  return { success: true, message: "Password updated successfully" };
 }
